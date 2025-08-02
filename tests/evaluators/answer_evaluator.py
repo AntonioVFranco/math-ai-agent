@@ -1,0 +1,354 @@
+"""
+Answer Evaluator for Mathematical Problem Benchmarking
+
+This module provides robust evaluation of mathematical answers by extracting
+numerical values from various text formats and comparing them with ground truth.
+
+Author: Math AI Agent Team
+Task ID: TEST-002
+"""
+
+import re
+import math
+from typing import Union, List, Optional, Tuple
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+def extract_final_answer(text: str) -> Optional[Union[float, int]]:
+    """
+    Extract the final numerical answer from text using multiple strategies.
+    
+    This function handles various common formats:
+    - "The answer is 42"
+    - "#### 42" (GSM8K format)
+    - "Final answer: 42"
+    - "= 42" at the end
+    - Numbers in parentheses or brackets
+    - Decimal and fractional representations
+    
+    Args:
+        text: Text containing the mathematical answer
+        
+    Returns:
+        Extracted numerical value or None if not found
+    """
+    if not text or not isinstance(text, str):
+        return None
+    
+    text = text.strip()
+    
+    # Strategy 1: Look for GSM8K format "#### number"
+    gsm8k_pattern = r'####\s*([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)'
+    match = re.search(gsm8k_pattern, text)
+    if match:
+        try:
+            return _convert_to_number(match.group(1))
+        except ValueError:
+            pass
+    
+    # Strategy 2: Look for "The answer is X" pattern
+    answer_patterns = [
+        r'(?:the\s+)?answer\s+is\s+([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)',
+        r'final\s+answer:?\s*([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)',
+        r'result:?\s*([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)',
+        r'solution:?\s*([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)'
+    ]
+    
+    for pattern in answer_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            try:
+                return _convert_to_number(match.group(1))
+            except ValueError:
+                continue
+    
+    # Strategy 3: Look for equals sign followed by number near the end
+    equals_pattern = r'=\s*([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\s*(?:\.|$)'
+    matches = list(re.finditer(equals_pattern, text))
+    if matches:
+        # Take the last match (most likely to be final answer)
+        try:
+            return _convert_to_number(matches[-1].group(1))
+        except ValueError:
+            pass
+    
+    # Strategy 4: Look for numbers in parentheses or brackets at the end
+    bracketed_patterns = [
+        r'\(([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\)\s*$',
+        r'\[([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\]\s*$'
+    ]
+    
+    for pattern in bracketed_patterns:
+        match = re.search(pattern, text)
+        if match:
+            try:
+                return _convert_to_number(match.group(1))
+            except ValueError:
+                continue
+    
+    # Strategy 5: Look for standalone number at the end of the text
+    end_number_pattern = r'([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\s*\.?\s*$'
+    match = re.search(end_number_pattern, text)
+    if match:
+        try:
+            return _convert_to_number(match.group(1))
+        except ValueError:
+            pass
+    
+    # Strategy 6: Extract all numbers and return the last one
+    all_numbers = re.findall(r'([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)', text)
+    if all_numbers:
+        try:
+            return _convert_to_number(all_numbers[-1])
+        except ValueError:
+            pass
+    
+    logger.warning(f"Could not extract numerical answer from: {text[:100]}...")
+    return None
+
+
+def _convert_to_number(value_str: str) -> Union[float, int]:
+    """
+    Convert string to appropriate numerical type.
+    
+    Args:
+        value_str: String representation of number
+        
+    Returns:
+        Integer if whole number, float otherwise
+        
+    Raises:
+        ValueError: If conversion fails
+    """
+    try:
+        # Try integer first
+        if '.' not in value_str and 'e' not in value_str.lower():
+            return int(value_str)
+        
+        # Convert to float
+        float_val = float(value_str)
+        
+        # Return as int if it's a whole number
+        if float_val.is_integer():
+            return int(float_val)
+        
+        return float_val
+    
+    except (ValueError, OverflowError) as e:
+        raise ValueError(f"Cannot convert '{value_str}' to number: {e}")
+
+
+def normalize_number(value: Union[float, int], tolerance: float = 1e-6) -> Union[float, int]:
+    """
+    Normalize a number for comparison.
+    
+    Args:
+        value: Number to normalize
+        tolerance: Tolerance for floating point comparison
+        
+    Returns:
+        Normalized number
+    """
+    if isinstance(value, int):
+        return value
+    
+    if isinstance(value, float):
+        # Check if it's effectively an integer
+        if abs(value - round(value)) < tolerance:
+            return int(round(value))
+        
+        # Round to reasonable precision
+        return round(value, 10)
+    
+    return value
+
+
+def numbers_equal(num1: Union[float, int], num2: Union[float, int], 
+                 tolerance: float = 1e-6) -> bool:
+    """
+    Compare two numbers with appropriate tolerance.
+    
+    Args:
+        num1: First number
+        num2: Second number
+        tolerance: Tolerance for floating point comparison
+        
+    Returns:
+        True if numbers are equal within tolerance
+    """
+    if num1 is None or num2 is None:
+        return num1 == num2
+    
+    # Exact equality check first
+    if num1 == num2:
+        return True
+    
+    # Handle different types
+    if isinstance(num1, (int, float)) and isinstance(num2, (int, float)):
+        return abs(float(num1) - float(num2)) < tolerance
+    
+    return False
+
+
+def evaluate_answer(predicted_answer: str, ground_truth: str, 
+                   tolerance: float = 1e-6) -> Tuple[bool, dict]:
+    """
+    Evaluate if a predicted answer matches the ground truth.
+    
+    This is the main evaluation function that handles various answer formats
+    and provides detailed feedback about the evaluation process.
+    
+    Args:
+        predicted_answer: The answer text from the model
+        ground_truth: The correct answer (can be text or number)
+        tolerance: Numerical tolerance for comparison
+        
+    Returns:
+        Tuple of (is_correct, evaluation_details)
+        
+    Examples:
+        >>> evaluate_answer("The answer is 14", "14")
+        (True, {...})
+        
+        >>> evaluate_answer("#### 42", "42.0")
+        (True, {...})
+    """
+    evaluation_details = {
+        'predicted_text': predicted_answer,
+        'ground_truth_text': ground_truth,
+        'predicted_number': None,
+        'ground_truth_number': None,
+        'extraction_success': False,
+        'numerical_match': False,
+        'error_message': None
+    }
+    
+    try:
+        # Extract numerical answer from predicted text
+        predicted_num = extract_final_answer(predicted_answer)
+        evaluation_details['predicted_number'] = predicted_num
+        
+        # Extract numerical answer from ground truth
+        # Ground truth might already be a number or contain "#### number" format
+        ground_truth_num = extract_final_answer(ground_truth)
+        evaluation_details['ground_truth_number'] = ground_truth_num
+        
+        # Check if extraction was successful
+        if predicted_num is not None and ground_truth_num is not None:
+            evaluation_details['extraction_success'] = True
+            
+            # Normalize numbers for comparison
+            normalized_pred = normalize_number(predicted_num, tolerance)
+            normalized_gt = normalize_number(ground_truth_num, tolerance)
+            
+            # Compare numbers
+            is_equal = numbers_equal(normalized_pred, normalized_gt, tolerance)
+            evaluation_details['numerical_match'] = is_equal
+            
+            logger.info(f"Comparison: {normalized_pred} vs {normalized_gt} = {is_equal}")
+            return is_equal, evaluation_details
+        
+        elif predicted_num is None:
+            evaluation_details['error_message'] = "Could not extract number from predicted answer"
+            logger.warning(f"Failed to extract from predicted: {predicted_answer[:50]}...")
+            
+        elif ground_truth_num is None:
+            evaluation_details['error_message'] = "Could not extract number from ground truth"
+            logger.warning(f"Failed to extract from ground truth: {ground_truth[:50]}...")
+        
+        return False, evaluation_details
+    
+    except Exception as e:
+        evaluation_details['error_message'] = str(e)
+        logger.error(f"Error in answer evaluation: {e}")
+        return False, evaluation_details
+
+
+def batch_evaluate_answers(predictions: List[str], ground_truths: List[str],
+                          tolerance: float = 1e-6) -> List[Tuple[bool, dict]]:
+    """
+    Evaluate multiple answer pairs in batch.
+    
+    Args:
+        predictions: List of predicted answers
+        ground_truths: List of ground truth answers
+        tolerance: Numerical tolerance for comparison
+        
+    Returns:
+        List of (is_correct, evaluation_details) tuples
+    """
+    if len(predictions) != len(ground_truths):
+        raise ValueError("Predictions and ground truths must have same length")
+    
+    results = []
+    for pred, gt in zip(predictions, ground_truths):
+        result = evaluate_answer(pred, gt, tolerance)
+        results.append(result)
+    
+    return results
+
+
+def calculate_accuracy_metrics(evaluation_results: List[Tuple[bool, dict]]) -> dict:
+    """
+    Calculate accuracy metrics from evaluation results.
+    
+    Args:
+        evaluation_results: List of (is_correct, details) tuples
+        
+    Returns:
+        Dictionary with accuracy metrics
+    """
+    total_problems = len(evaluation_results)
+    if total_problems == 0:
+        return {'accuracy': 0.0, 'correct_count': 0, 'total_count': 0}
+    
+    correct_count = sum(1 for is_correct, _ in evaluation_results if is_correct)
+    accuracy = correct_count / total_problems
+    
+    # Count extraction success rate
+    extraction_success_count = sum(
+        1 for _, details in evaluation_results 
+        if details.get('extraction_success', False)
+    )
+    extraction_rate = extraction_success_count / total_problems
+    
+    return {
+        'accuracy': accuracy,
+        'correct_count': correct_count,
+        'total_count': total_problems,
+        'extraction_success_rate': extraction_rate,
+        'extraction_failures': total_problems - extraction_success_count
+    }
+
+
+# Test the evaluator with some examples
+if __name__ == "__main__":
+    # Test cases
+    test_cases = [
+        ("The answer is 14", "14", True),
+        ("#### 42", "42", True),
+        ("Final answer: 3.14", "3.14", True),
+        ("The result is 100.", "100", True),
+        ("x = 25", "25", True),
+        ("No clear answer", "10", False),
+        ("The answer is 14.0", "14", True),
+        ("#### 72", "Natalia sold 48+24 = <<48+24=72>>72 clips altogether in April and May.\n#### 72", True)
+    ]
+    
+    print("Testing Answer Evaluator")
+    print("=" * 50)
+    
+    for i, (predicted, ground_truth, expected) in enumerate(test_cases):
+        is_correct, details = evaluate_answer(predicted, ground_truth)
+        status = "✓" if is_correct == expected else "✗"
+        
+        print(f"Test {i+1}: {status}")
+        print(f"  Predicted: {predicted}")
+        print(f"  Ground Truth: {ground_truth}")
+        print(f"  Expected: {expected}, Got: {is_correct}")
+        print(f"  Details: {details}")
+        print()

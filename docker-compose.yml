@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  # Main application service
+  app:
+    # Build from Dockerfile in current directory
+    build:
+      context: .
+      dockerfile: Dockerfile
+    
+    # Container name for easier identification
+    container_name: math-ai-agent-dev
+    
+    # Port mapping: host:container
+    # Maps host port 7860 to container port 7860 for Gradio interface
+    ports:
+      - "7860:7860"
+    
+    # Volume mounts for live development
+    # These allow changes in local files to be reflected immediately in the container
+    volumes:
+      # Mount source code directory for live code changes
+      - ./src:/app/src
+      # Mount data directory for easy access to benchmarks and datasets
+      - ./data:/app/data
+      # Mount examples directory for testing and demonstration
+      - ./examples:/app/examples
+      # Mount tests directory for running tests
+      - ./tests:/app/tests
+    
+    # Load environment variables from .env file
+    # This file should contain sensitive configuration like API keys
+    env_file:
+      - .env
+    
+    # Keep container running in interactive mode
+    stdin_open: true
+    tty: true
+    
+    # Restart policy - restart container if it stops unexpectedly
+    restart: unless-stopped
