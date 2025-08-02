@@ -5,7 +5,7 @@ This module provides comprehensive statistical analysis capabilities including
 descriptive statistics, probability distributions, hypothesis testing, and
 random variate generation using SciPy.stats and NumPy.
 
-Author: Math AI Agent Team
+Author: MathBoardAI Agent Team
 Task ID: SOLVER-003
 """
 

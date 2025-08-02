@@ -6,7 +6,7 @@ gradient descent algorithms. It enables finding minima of functions and
 visualizing the optimization process, which is fundamental for machine 
 learning model training.
 
-Author: Math AI Agent Team
+Author: MathBoardAI Agent Team
 Task ID: SOLVER-002
 """
 

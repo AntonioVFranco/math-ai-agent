@@ -4,7 +4,7 @@ Comprehensive Test Suite for SymPy MCP Server
 This test suite covers all tools, error cases, and acceptance criteria
 for the SymPy Mathematical Computing Protocol server.
 
-Author: Math AI Agent Team
+Author: MathBoardAI Agent Team
 Task ID: MCP-001
 Coverage Target: 90%+
 """

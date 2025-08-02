@@ -6,7 +6,7 @@ Provides optimized matrix operations and advanced decompositions for AI/ML
 applications including dimensionality reduction, neural network analysis,
 and optimization problems.
 
-Author: Math AI Agent Team
+Author: MathBoardAI Agent Team
 Task ID: SOLVER-001
 Field: Numerical Linear Algebra & Matrix Theory
 """

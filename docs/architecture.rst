@@ -1,7 +1,7 @@
 System Architecture
 ==================
 
-The Math AI Agent is built on a modular, pipeline-based architecture that ensures reliability, maintainability, and extensibility. This document provides a comprehensive overview of the system's architectural components and their interactions.
+The MathBoardAI Agent is built on a modular, pipeline-based architecture that ensures reliability, maintainability, and extensibility. This document provides a comprehensive overview of the system's architectural components and their interactions.
 
 Architecture Overview
 ---------------------
@@ -311,4 +311,4 @@ Quality Assurance
    * Error rate tracking
    * Performance metrics collection
 
-This architecture ensures the Math AI Agent is robust, maintainable, and capable of handling complex mathematical problems while providing accurate, well-verified solutions.
+This architecture ensures the MathBoardAI Agent is robust, maintainable, and capable of handling complex mathematical problems while providing accurate, well-verified solutions.

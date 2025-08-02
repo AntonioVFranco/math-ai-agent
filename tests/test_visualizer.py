@@ -5,7 +5,7 @@ Tests all functionality of the integrated visualization system including
 2D function plotting, matrix heatmaps, decomposition visualizations,
 and integration with the Gradio interface.
 
-Author: Math AI Agent Team
+Author: MathBoardAI Agent Team
 Task ID: UI-002 / F5
 Coverage Target: 80%+
 """

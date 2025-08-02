@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Resource Monitoring Script for Math AI Agent Performance Testing
+Resource Monitoring Script for MathBoardAI Agent Performance Testing
 
-This script monitors CPU and memory usage of the Math AI Agent application
+This script monitors CPU and memory usage of the MathBoardAI Agent application
 during performance testing, logging the data to CSV for analysis.
 
-Author: Math AI Agent Team
+Author: MathBoardAI Agent Team
 Task ID: TEST-003
 """
 
@@ -490,7 +490,7 @@ def signal_handler(signum, frame):
 
 def main():
     """Main function for command-line usage."""
-    parser = argparse.ArgumentParser(description="Monitor system resources for Math AI Agent")
+    parser = argparse.ArgumentParser(description="Monitor system resources for MathBoardAI Agent")
     
     parser.add_argument(
         "--output", "-o",

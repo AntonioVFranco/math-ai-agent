@@ -5,7 +5,7 @@ Tests all functionality of the mathematical solution verifier including
 numerical cross-validation, symbolic verification, matrix reconstruction,
 and integration with the core engine pipeline.
 
-Author: Math AI Agent Team
+Author: MathBoardAI Agent Team
 Task ID: CORE-003
 Coverage Target: 80%+
 """

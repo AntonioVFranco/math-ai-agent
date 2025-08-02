@@ -5,7 +5,7 @@ Tests all functionality of the mathematical problem parser including
 domain classification, problem type identification, entity extraction,
 and edge cases.
 
-Author: Math AI Agent Team
+Author: MathBoardAI Agent Team
 Task ID: CORE-002 / F1
 Coverage Target: 90%+
 """

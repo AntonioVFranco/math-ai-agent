@@ -9,7 +9,7 @@ Measures and compares:
 - Latency 
 - Quality of explanations
 
-Author: Math AI Agent Team
+Author: MathBoardAI Agent Team
 Task ID: TEST-002
 """
 
@@ -128,7 +128,7 @@ class AgentRunner:
         try:
             from core.engine import execute_solution_pipeline
             self.execute_pipeline = execute_solution_pipeline
-            logger.info("Math AI Agent engine initialized successfully")
+            logger.info("MathBoardAI Agent engine initialized successfully")
         except ImportError as e:
             logger.error(f"Failed to import engine: {e}")
             self.execute_pipeline = None
@@ -415,13 +415,13 @@ class BenchmarkOrchestrator:
         print(f"Total Problems: {total_problems}")
         print(f"Baseline Model: {self.baseline_model}")
         print("\nACCURACY:")
-        print(f"  Math AI Agent: {agent_accuracy:.3f} ({agent_correct_count}/{total_problems})")
+        print(f"  MathBoardAI Agent: {agent_accuracy:.3f} ({agent_correct_count}/{total_problems})")
         print(f"  Baseline LLM:  {baseline_accuracy:.3f} ({baseline_correct_count}/{total_problems})")
         print("\nLATENCY (Average):")
-        print(f"  Math AI Agent: {agent_avg_latency:.1f} ms")
+        print(f"  MathBoardAI Agent: {agent_avg_latency:.1f} ms")
         print(f"  Baseline LLM:  {baseline_avg_latency:.1f} ms")
         print("\nERRORS:")
-        print(f"  Math AI Agent: {agent_error_count}")
+        print(f"  MathBoardAI Agent: {agent_error_count}")
         print(f"  Baseline LLM:  {baseline_error_count}")
         
         # Performance comparison

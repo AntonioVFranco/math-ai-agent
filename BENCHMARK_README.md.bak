@@ -1,0 +1,332 @@
+# Comparative LLM Performance Benchmark Suite
+
+## Overview
+
+This benchmark suite evaluates the performance of our Math AI Agent against baseline LLMs (e.g., GPT-4) on standard mathematical datasets like GSM8K. It measures and compares key metrics including accuracy, latency, and solution quality.
+
+**Task ID:** TEST-002  
+**Status:** ✅ Complete - All acceptance criteria passed
+
+## Quick Start
+
+### Prerequisites
+```bash
+pip install pandas openai
+```
+
+### Basic Usage
+```bash
+# Run benchmark with your OpenAI API key
+./scripts/run_benchmark.sh -k sk-your-openai-api-key
+
+# Run on limited problems for testing
+./scripts/run_benchmark.sh -k sk-your-key -n 5
+
+# Use different baseline model
+./scripts/run_benchmark.sh -k sk-your-key -m gpt-4 -n 10
+```
+
+## Architecture
+
+### Core Components
+
+1. **Answer Evaluator** (`tests/evaluators/answer_evaluator.py`)
+   - Robust numerical extraction from various text formats
+   - Handles GSM8K format: `#### 42`
+   - Supports natural language: `"The answer is 14"`
+   - Floating-point tolerance and normalization
+
+2. **Benchmark Runner** (`tests/benchmark_runner.py`)
+   - Dataset loader for JSONL format
+   - Agent runner (calls local math-ai-agent engine)
+   - Baseline LLM runner (OpenAI API)
+   - Orchestrator for complete benchmark execution
+
+3. **Shell Script** (`scripts/run_benchmark.sh`)
+   - Command-line interface
+   - Environment validation
+   - Dependency checking
+   - User-friendly error messages
+
+4. **Sample Dataset** (`data/benchmarks/gsm8k_sample.jsonl`)
+   - 10 GSM8K problems in standard format
+   - Covers various mathematical domains
+   - Ready for immediate testing
+
+## Usage Examples
+
+### Command Line Options
+
+```bash
+./scripts/run_benchmark.sh [OPTIONS]
+
+Options:
+  -k, --api-key KEY        OpenAI API key (required)
+  -d, --dataset PATH       Dataset JSONL file (default: data/benchmarks/gsm8k_sample.jsonl)
+  -n, --max-problems NUM   Max problems to process (default: all)
+  -m, --model MODEL        Baseline model (default: gpt-4o)
+  -o, --output PATH        Output CSV path (default: benchmark_report.csv)
+  -h, --help               Show help message
+```
+
+### Environment Variables
+```bash
+export OPENAI_API_KEY=sk-your-key-here
+./scripts/run_benchmark.sh -n 5
+```
+
+### Python API
+```python
+from tests.benchmark_runner import BenchmarkOrchestrator
+
+orchestrator = BenchmarkOrchestrator(api_key="sk-your-key")
+df = orchestrator.run_benchmark(
+    dataset_path="data/benchmarks/gsm8k_sample.jsonl",
+    max_problems=10,
+    output_path="my_benchmark.csv"
+)
+```
+
+## Output Format
+
+The benchmark generates a CSV report with the following columns:
+
+| Column | Description |
+|--------|-------------|
+| `problem_id` | Unique identifier for each problem |
+| `problem_text` | The mathematical problem statement |
+| `ground_truth` | Correct answer from dataset |
+| `agent_answer` | Math AI Agent's response |
+| `agent_correct` | Whether agent answer is correct (boolean) |
+| `agent_latency_ms` | Agent response time in milliseconds |
+| `agent_verified` | Whether agent performed verification |
+| `baseline_answer` | Baseline LLM's response |
+| `baseline_correct` | Whether baseline answer is correct (boolean) |
+| `baseline_latency_ms` | Baseline response time in milliseconds |
+
+### Sample Output
+
+```csv
+problem_id,problem_text,ground_truth,agent_answer,agent_correct,agent_latency_ms,agent_verified,baseline_answer,baseline_correct,baseline_latency_ms
+gsm8k_0,"Natalia sold clips to 48 friends...",#### 72,"The answer is 72",true,1502.3,true,"72 clips total",true,892.1
+```
+
+## Performance Metrics
+
+The benchmark automatically calculates and displays:
+
+- **Accuracy**: Percentage of correctly solved problems
+- **Average Latency**: Mean response time per problem
+- **Error Rate**: Percentage of failed attempts
+- **Comparative Performance**: Direct comparison between systems
+
+### Sample Summary Output
+
+```
+BENCHMARK SUMMARY
+============================================================
+Total Problems: 10
+Baseline Model: gpt-4o
+
+ACCURACY:
+  Math AI Agent: 0.900 (9/10)
+  Baseline LLM:  0.800 (8/10)
+
+LATENCY (Average):
+  Math AI Agent: 1547.2 ms
+  Baseline LLM:  856.4 ms
+
+PERFORMANCE COMPARISON:
+  Accuracy: BETTER (+0.100)
+  Speed: SLOWER (+690.8 ms)
+============================================================
+```
+
+## Answer Evaluation
+
+The answer evaluator handles multiple formats:
+
+### Supported Formats
+
+- **GSM8K Format**: `#### 42`
+- **Natural Language**: `"The answer is 14"`
+- **Mathematical**: `"x = 25"`, `"Result: 3.14"`
+- **Scientific Notation**: `"1.5e10"`
+- **Negative Numbers**: `"-7.5"`
+
+### Evaluation Logic
+
+1. **Extract**: Multiple extraction strategies for robustness
+2. **Normalize**: Handle integer/float equivalence (14.0 = 14)
+3. **Compare**: Tolerance-based numerical comparison
+4. **Report**: Detailed evaluation metadata
+
+## Testing
+
+### Core Logic Tests
+```bash
+python3 test_benchmark_core.py
+```
+
+### Acceptance Criteria Tests
+```bash
+python3 test_benchmark_acceptance.py
+```
+
+### Full System Tests (requires pandas/openai)
+```bash
+python3 test_benchmark_system.py
+```
+
+## Dataset Format
+
+The benchmark expects JSONL files where each line contains:
+
+```json
+{
+  "question": "What is 2 + 2?",
+  "answer": "2 + 2 = 4\n#### 4"
+}
+```
+
+### Adding Custom Datasets
+
+1. Create JSONL file with `question` and `answer` fields
+2. Use the `--dataset` option to specify path
+3. Ensure answers follow GSM8K format or include clear numerical answers
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Missing Dependencies**
+   ```bash
+   pip install pandas openai
+   ```
+
+2. **Invalid API Key**
+   - Ensure key starts with `sk-`
+   - Check key has sufficient credits
+   - Verify key has correct permissions
+
+3. **Import Errors**
+   - Ensure you're in the project root directory
+   - Check that `src/core/engine.py` exists
+   - Verify Math AI Agent is properly installed
+
+4. **Dataset Issues**
+   - Validate JSONL format with `python3 -m json.tool < dataset.jsonl`
+   - Check each line has `question` and `answer` fields
+   - Ensure file encoding is UTF-8
+
+### Debug Mode
+
+For detailed debugging, run Python scripts directly:
+
+```bash
+cd /path/to/project
+python3 tests/benchmark_runner.py --api-key sk-your-key --dataset data/benchmarks/gsm8k_sample.jsonl --max-problems 2
+```
+
+## Customization
+
+### Adding New Metrics
+
+Extend `BenchmarkResult` dataclass in `benchmark_runner.py`:
+
+```python
+@dataclass
+class BenchmarkResult:
+    # ... existing fields ...
+    custom_metric: float
+```
+
+### Custom Baseline Models
+
+Modify `BaselineLLMRunner` constructor:
+
+```python
+runner = BaselineLLMRunner(api_key, model="claude-3-opus")
+```
+
+### Answer Format Extensions
+
+Extend `extract_final_answer()` in `answer_evaluator.py`:
+
+```python
+# Add new extraction pattern
+custom_pattern = r'my_format:\s*([+-]?\d*\.?\d+)'
+match = re.search(custom_pattern, text)
+```
+
+## Integration
+
+### CI/CD Integration
+
+```yaml
+# GitHub Actions example
+- name: Run Benchmark
+  run: |
+    ./scripts/run_benchmark.sh -k ${{ secrets.OPENAI_API_KEY }} -n 5
+  env:
+    OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+```
+
+### Automated Reporting
+
+```python
+# Schedule regular benchmarks
+import schedule
+
+def run_daily_benchmark():
+    orchestrator = BenchmarkOrchestrator(api_key)
+    df = orchestrator.run_benchmark("datasets/daily_test.jsonl")
+    # Send results to monitoring system
+
+schedule.every().day.at("02:00").do(run_daily_benchmark)
+```
+
+## Security
+
+- API keys are never logged or stored
+- All API communications use secure HTTPS
+- No sensitive data is written to output files
+- Environment variables are cleared after use
+
+## Performance
+
+### Optimization Tips
+
+1. **Limit Problems**: Use `-n` flag for faster iteration
+2. **Parallel Processing**: Future enhancement for concurrent API calls
+3. **Caching**: Consider caching results for repeated runs
+4. **Monitoring**: Track API usage and costs
+
+### Scaling
+
+- **Large Datasets**: Process in batches to avoid memory issues
+- **Rate Limits**: Built-in error handling for API limits
+- **Cost Control**: Monitor token usage with OpenAI dashboard
+
+## Contributing
+
+When extending the benchmark suite:
+
+1. Add tests for new functionality
+2. Update acceptance criteria tests
+3. Maintain backward compatibility
+4. Document new features in this README
+
+## Acceptance Criteria Status
+
+✅ **All 5 acceptance criteria passed:**
+
+1. ✅ benchmark_runner.py executes without errors on gsm8k_sample.jsonl
+2. ✅ Successfully makes calls to both local engine and external OpenAI API  
+3. ✅ answer_evaluator.py correctly identifies "The answer is 14" matches "14"
+4. ✅ benchmark_report.csv generated with all specified columns
+5. ✅ Provides clear, quantitative comparison between systems
+
+## License
+
+This benchmark suite is part of the Math AI Agent project and follows the same licensing terms.

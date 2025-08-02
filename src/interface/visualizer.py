@@ -5,7 +5,7 @@ A comprehensive visualization module that generates and displays interactive plo
 and diagrams for mathematical problems and solutions. This system enhances user
 understanding by providing visual representations within the Gradio interface.
 
-Author: Math AI Agent Team
+Author: MathBoardAI Agent Team
 Task ID: UI-002 / F5
 Integration: Called by engine.py, displayed in app.py
 """

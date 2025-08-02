@@ -4,7 +4,7 @@ SymPy Mathematical Computing Protocol (MCP) Server
 This module implements a comprehensive MCP server for the SymPy library,
 providing advanced symbolic computation capabilities for the math-ai-agent.
 
-Author: Math AI Agent Team
+Author: MathBoardAI Agent Team
 Task ID: MCP-001
 """
 

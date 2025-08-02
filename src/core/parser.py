@@ -5,7 +5,7 @@ A foundational, rule-based parser that analyzes raw text strings containing
 mathematical problems. Classifies domain, identifies intent, and extracts
 key mathematical entities.
 
-Author: Math AI Agent Team
+Author: MathBoardAI Agent Team
 Task ID: CORE-002 / F1
 """
 

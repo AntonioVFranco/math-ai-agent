@@ -10,9 +10,9 @@ sys.path.insert(0, os.path.abspath('../src'))
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
-project = 'Math AI Agent'
-copyright = '2025, Math AI Agent Team'
-author = 'Math AI Agent Team'
+project = 'MathBoardAI Agent'
+copyright = '2025, MathBoardAI Agent Team'
+author = 'MathBoardAI Agent Team'
 release = '2.0.0'
 
 # -- General configuration ---------------------------------------------------
