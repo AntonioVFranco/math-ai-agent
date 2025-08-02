@@ -4,7 +4,7 @@ Comprehensive Test Suite for Linear Algebra Solver
 Tests all functionality of the high-performance linear algebra solver including
 matrix operations, decompositions, error handling, and mathematical verification.
 
-Author: MathBoardAI Agent Team
+Author: Math AI Agent Team
 Task ID: SOLVER-001
 Coverage Target: 90%+
 """

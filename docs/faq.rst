@@ -1,1 +1,509 @@
-Frequently Asked Questions ========================== This section answers common questions about using the MathBoardAI Agent system. Getting Started --------------- What is the MathBoardAI Agent? ~~~~~~~~~~~~~~~~~~~~~~~~~~ The MathBoardAI Agent is a specialized AI system designed to solve complex mathematical problems across multiple domains. It combines OpenAI's GPT-4o for natural language understanding with SymPy for precise symbolic mathematics, providing step-by-step solutions with verification. **Key Features:** - Solves problems in algebra, calculus, linear algebra, optimization, and statistics - Provides step-by-step explanations - Verifies solutions for accuracy - Generates interactive visualizations - Supports both symbolic and numerical computations Do I need to install anything to use it? ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ For the web interface, you only need: - A modern web browser - An OpenAI API key - Internet connection The system can be accessed through a web interface without any local installation. However, if you want to run it locally or contribute to development, you can use Docker or install the Python dependencies. How much does it cost to use? ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ The MathBoardAI Agent itself is free to use. However, you need an OpenAI API key, and you'll be charged for API usage based on OpenAI's pricing. Typical problems cost only a few cents to solve. **Cost factors:** - Simple problems: $0.01-0.05 per solution - Complex multi-step problems: $0.05-0.20 per solution - The system is optimized to minimize API calls while maintaining accuracy Technical Questions ------------------- What is an MCP and why do you use it? ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ MCP stands for Model Context Protocol. It's a standardized way for AI systems to interact with external tools and services. **Why we use MCP for SymPy:** - **Isolation**: Mathematical computations run in a separate, secure environment - **Reliability**: Reduces errors from complex symbolic computation - **Consistency**: Standardized interface for mathematical operations - **Safety**: Prevents code injection and execution issues **Benefits for users:** - More accurate symbolic mathematics - Better error handling - Consistent mathematical notation - Improved verification capabilities How does the verification system work? ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ The MathBoardAI Agent uses a multi-layer verification system to ensure solution accuracy: **1. Numerical Verification:** - Substitutes random values to check algebraic solutions - Tests derivatives and integrals numerically - Validates matrix operations with test cases **2. Symbolic Verification:** - Uses SymPy to verify algebraic manipulations - Checks dimensional consistency - Validates mathematical identities **3. Cross-Validation:** - Compares results from different solution methods - Checks consistency across multiple approaches - Validates against known mathematical properties **4. Boundary Testing:** - Tests edge cases and special values - Verifies behavior at limits and boundaries - Checks for mathematical exceptions **Confidence Levels:** - **High (90%+)**: Multiple verification methods passed - **Medium (70-90%)**: Some verification successful - **Low (50-70%)**: Limited verification possible - **Not Verified (<50%)**: Unable to verify or verification failed Is my API key stored or logged? ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ **No, your API key is never stored or logged.** **Security measures:** - API keys are only held in memory during the session - Keys are transmitted securely using HTTPS - No persistent storage of keys - Session data is cleared when you close the browser - Keys are never logged in system files **Best practices:** - Use a dedicated API key for this service - Rotate your keys regularly - Monitor your OpenAI usage dashboard - Never share your API key with others Problem Solving --------------- What types of mathematical problems can it solve? ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ The system supports a wide range of mathematical domains: **Algebra:** - Equation solving (linear, quadratic, polynomial) - Factoring and expanding expressions - Simplifying complex expressions - System of equations **Calculus:** - Derivatives (all orders, implicit differentiation) - Integrals (definite, indefinite, improper) - Limits and continuity - Series and sequences **Linear Algebra:** - Matrix operations (determinant, inverse, multiplication) - Eigenvalues and eigenvectors - Matrix decompositions (LU, QR, SVD) - Linear systems solving **Optimization:** - Finding critical points analytically - Gradient descent and numerical optimization - Constrained optimization (Lagrange multipliers) - Multi-variable optimization **Statistics:** - Descriptive statistics - Hypothesis testing (t-tests, chi-square, ANOVA) - Probability distributions - Correlation and regression analysis Why did my problem fail to solve? ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Several factors can cause solution failures: **Common causes:** 1. **Unclear problem statement** - Be specific about what you want to find 2. **Unsupported problem type** - Check if your problem domain is supported 3. **API key issues** - Verify your key is valid and has sufficient credits 4. **Complex notation** - Try simplifying or using standard mathematical notation 5. **Network connectivity** - Ensure stable internet connection **How to improve success rate:** - Use clear, standard mathematical notation - Break complex problems into smaller steps - Specify exactly what you want to find - Include all necessary information (constraints, domains, etc.) - Try rephrasing if the first attempt fails **Example of unclear vs. clear:** - Unclear: "solve this equation" - Clear: "solve for x: 2x + 5 = 13" Can it handle word problems? ~~~~~~~~~~~~~~~~~~~~~~~~~~~ Yes! The system is designed to understand mathematical problems described in natural language. **Examples of supported word problems:** **Physics:** .. code-block:: text A ball is thrown upward with initial velocity 20 m/s. When will it return to the ground? **Economics:** .. code-block:: text If I invest $1000 at 5% annual interest compounded monthly, how much will I have after 10 years? **Geometry:** .. code-block:: text What is the area of a circle with radius 5 meters? **Optimization:** .. code-block:: text A farmer has 100 meters of fence. What dimensions should a rectangular pen be to maximize area? **Tips for word problems:** - Include all given information - Clearly state what you want to find - Use standard units - Specify any constraints or assumptions How accurate are the solutions? ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ The MathBoardAI Agent prioritizes accuracy through multiple verification layers: **Accuracy measures:** - **Symbolic computations**: Exact when using SymPy (computer algebra system) - **Numerical computations**: Typically accurate to 12-15 decimal places - **Verification confidence**: System reports confidence level for each solution - **Error detection**: Automatically flags uncertain or potentially incorrect results **When solutions are most accurate:** - Well-defined mathematical problems - Standard notation and clear problem statements - Problems within supported domains - Sufficient context and constraints provided **When to double-check:** - Low verification confidence (<70%) - Critical applications (engineering, finance) - Unusual or edge-case problems - Results that seem counterintuitive Usage and Interface ------------------- How do I enter mathematical expressions? ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ The system accepts multiple input formats: **Plain text:** .. code-block:: text x^2 + 2*x + 1 = 0 sin(x) + cos(x) integral of x^2 from 0 to 1 **LaTeX notation:** .. code-block:: text $x^2 + 2x + 1 = 0$ $\sin(x) + \cos(x)$ $\int_0^1 x^2 dx$ **Natural language:** .. code-block:: text Find the derivative of x squared plus 2x plus 1 What is the integral of sine of x? Solve the quadratic equation x squared minus 4 equals 0 **Matrix notation:** .. code-block:: text [[1, 2], [3, 4]] determinant of [[1, 2, 3], [4, 5, 6], [7, 8, 9]] Can I save my solutions? ~~~~~~~~~~~~~~~~~~~~~~~ Currently, solutions are not automatically saved. However, you can: **Manual saving options:** - Copy and paste solutions to your own documents - Save the entire webpage (Ctrl+S or Cmd+S) - Take screenshots of visualizations - Print solutions to PDF **Future features (planned):** - Solution history - Export to LaTeX/PDF - Shareable solution links - Workspace saving Why don't I see a visualization for my problem? ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Visualizations are automatically generated when relevant, but not all problems have meaningful visual representations. **Problems that typically get visualizations:** - Function plots (calculus, algebra) - Matrix heatmaps (linear algebra) - Optimization paths (gradient descent) - Statistical distributions and plots - Geometric shapes and diagrams **Problems without visualizations:** - Simple arithmetic - Pure algebraic manipulations - Some abstract mathematical concepts - Text-based statistical results **Troubleshooting visualization issues:** - Check the "Visualização" tab - Wait a moment for complex plots to render - Refresh the page if plots don't appear - Some plots may require specific browsers or settings Can I use this for homework or exams? ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ **Academic integrity considerations:** **Appropriate use:** - Learning mathematical concepts and methods - Checking your own work for accuracy - Understanding solution steps and reasoning - Exploring different approaches to problems - Practicing with similar problems **Inappropriate use:** - Submitting AI-generated solutions as your own work - Using during closed-book exams without permission - Bypassing the learning process - Violating your institution's academic integrity policies **Recommended approach:** 1. Attempt problems yourself first 2. Use the system to check your work 3. Study the solution steps to understand methods 4. Practice similar problems independently 5. Always follow your instructor's guidelines Troubleshooting --------------- The system is running slowly ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ **Common causes and solutions:** **Network issues:** - Check your internet connection stability - Try refreshing the page - Close other bandwidth-intensive applications **Complex problems:** - Large matrix operations take more time - Multi-step optimization problems require patience - Consider breaking complex problems into smaller parts **API rate limits:** - OpenAI has usage limits that may cause delays - Wait a moment and try again - Check your OpenAI account for any issues **Browser issues:** - Clear browser cache and cookies - Try a different browser - Disable browser extensions that might interfere I'm getting error messages ~~~~~~~~~~~~~~~~~~~~~~~~~~ **Common error types and solutions:** **"Invalid API Key":** - Verify your key starts with 'sk-' - Check that the key is active on OpenAI's platform - Ensure you have sufficient API credits - Try regenerating your API key **"Problem parsing failed":** - Use clearer mathematical notation - Avoid ambiguous expressions - Include all necessary context - Try rephrasing the problem **"Solution pipeline failed":** - Check your internet connection - Verify your API key is working - Try a simpler version of the problem first - Report persistent issues to support **"No visualization available":** - Not all problems have visual representations - Check if you're looking in the right tab - Some plots may take time to generate The mathematics looks wrong ~~~~~~~~~~~~~~~~~~~~~~~~~~ **If you suspect an error:** **First steps:** 1. Check the verification status and confidence level 2. Look for any warnings in the solution 3. Try rephrasing the problem to ensure correct interpretation 4. Verify your input was parsed correctly **Reporting issues:** - Include the exact problem statement you used - Note any error messages or warnings - Specify what result you expected vs. what you got - Provide context about the mathematical domain **Getting help:** - Check similar examples in the tutorials - Try breaking the problem into smaller steps - Consult mathematical references for verification - Report bugs through the appropriate channels Advanced Usage -------------- Can I integrate this into my own applications? ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ The system is primarily designed as a web application, but there are options for integration: **Current options:** - Use the Docker container in your infrastructure - Adapt the Python codebase for your needs - Build on the open-source components **API considerations:** - The system requires OpenAI API access - You'll need to handle API key management - Consider rate limiting and cost management **Future possibilities:** - Dedicated API endpoints - SDK for popular programming languages - Webhook integrations - Batch processing capabilities How can I contribute to the project? ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ We welcome contributions! Here's how you can help: **Code contributions:** - Check the developer guide for setup instructions - Look for issues labeled "good first issue" - Follow the coding standards and testing requirements - Submit pull requests with clear descriptions **Documentation:** - Help improve tutorials and examples - Report unclear or missing documentation - Translate content to other languages - Create video tutorials or guides **Testing and feedback:** - Report bugs and issues - Suggest new features - Test edge cases and unusual problems - Provide feedback on user experience **Community:** - Help other users in discussions - Share interesting use cases - Write blog posts or articles about the system - Present at conferences or meetups What's planned for future releases? ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ **Upcoming features:** - Additional mathematical domains (differential equations, number theory) - Enhanced visualization capabilities - Solution history and workspace management - Mobile-optimized interface - Batch problem processing **Long-term goals:** - Advanced AI reasoning capabilities - Integration with educational platforms - Collaborative problem-solving features - Custom domain-specific solvers - Real-time collaboration tools **Stay updated:** - Follow the project on GitHub - Join community discussions - Subscribe to release notifications - Check the roadmap for detailed plans Getting Help ------------ Where can I get more help? ~~~~~~~~~~~~~~~~~~~~~~~~~ **Documentation:** - Start with the :doc:`quickstart` guide - Check domain-specific tutorials - Read the :doc:`developer_guide` for technical details **Community support:** - GitHub discussions for general questions - Issue tracker for bug reports - Community forums and chat rooms **Professional support:** - Commercial support options available - Custom development and integration services - Training and consultation services **Contact information:** - GitHub: [project repository] - Email: [support email] - Community: [discussion links] Remember: The MathBoardAI Agent is a powerful tool, but it's designed to assist and enhance your mathematical understanding, not replace the learning process. Use it wisely to become a better problem solver!
+Frequently Asked Questions
+==========================
+
+This section answers common questions about using the Math AI Agent system.
+
+Getting Started
+---------------
+
+What is the Math AI Agent?
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The Math AI Agent is a specialized AI system designed to solve complex mathematical problems across multiple domains. It combines OpenAI's GPT-4o for natural language understanding with SymPy for precise symbolic mathematics, providing step-by-step solutions with verification.
+
+**Key Features:**
+- Solves problems in algebra, calculus, linear algebra, optimization, and statistics
+- Provides step-by-step explanations
+- Verifies solutions for accuracy
+- Generates interactive visualizations
+- Supports both symbolic and numerical computations
+
+Do I need to install anything to use it?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For the web interface, you only need:
+- A modern web browser
+- An OpenAI API key
+- Internet connection
+
+The system can be accessed through a web interface without any local installation. However, if you want to run it locally or contribute to development, you can use Docker or install the Python dependencies.
+
+How much does it cost to use?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The Math AI Agent itself is free to use. However, you need an OpenAI API key, and you'll be charged for API usage based on OpenAI's pricing. Typical problems cost only a few cents to solve.
+
+**Cost factors:**
+- Simple problems: $0.01-0.05 per solution
+- Complex multi-step problems: $0.05-0.20 per solution
+- The system is optimized to minimize API calls while maintaining accuracy
+
+Technical Questions
+-------------------
+
+What is an MCP and why do you use it?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+MCP stands for Model Context Protocol. It's a standardized way for AI systems to interact with external tools and services.
+
+**Why we use MCP for SymPy:**
+- **Isolation**: Mathematical computations run in a separate, secure environment
+- **Reliability**: Reduces errors from complex symbolic computation
+- **Consistency**: Standardized interface for mathematical operations
+- **Safety**: Prevents code injection and execution issues
+
+**Benefits for users:**
+- More accurate symbolic mathematics
+- Better error handling
+- Consistent mathematical notation
+- Improved verification capabilities
+
+How does the verification system work?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The Math AI Agent uses a multi-layer verification system to ensure solution accuracy:
+
+**1. Numerical Verification:**
+- Substitutes random values to check algebraic solutions
+- Tests derivatives and integrals numerically
+- Validates matrix operations with test cases
+
+**2. Symbolic Verification:**
+- Uses SymPy to verify algebraic manipulations
+- Checks dimensional consistency
+- Validates mathematical identities
+
+**3. Cross-Validation:**
+- Compares results from different solution methods
+- Checks consistency across multiple approaches
+- Validates against known mathematical properties
+
+**4. Boundary Testing:**
+- Tests edge cases and special values
+- Verifies behavior at limits and boundaries
+- Checks for mathematical exceptions
+
+**Confidence Levels:**
+- **High (90%+)**: Multiple verification methods passed
+- **Medium (70-90%)**: Some verification successful
+- **Low (50-70%)**: Limited verification possible
+- **Not Verified (<50%)**: Unable to verify or verification failed
+
+Is my API key stored or logged?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**No, your API key is never stored or logged.**
+
+**Security measures:**
+- API keys are only held in memory during the session
+- Keys are transmitted securely using HTTPS
+- No persistent storage of keys
+- Session data is cleared when you close the browser
+- Keys are never logged in system files
+
+**Best practices:**
+- Use a dedicated API key for this service
+- Rotate your keys regularly
+- Monitor your OpenAI usage dashboard
+- Never share your API key with others
+
+Problem Solving
+---------------
+
+What types of mathematical problems can it solve?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The system supports a wide range of mathematical domains:
+
+**Algebra:**
+- Equation solving (linear, quadratic, polynomial)
+- Factoring and expanding expressions
+- Simplifying complex expressions
+- System of equations
+
+**Calculus:**
+- Derivatives (all orders, implicit differentiation)
+- Integrals (definite, indefinite, improper)
+- Limits and continuity
+- Series and sequences
+
+**Linear Algebra:**
+- Matrix operations (determinant, inverse, multiplication)
+- Eigenvalues and eigenvectors
+- Matrix decompositions (LU, QR, SVD)
+- Linear systems solving
+
+**Optimization:**
+- Finding critical points analytically
+- Gradient descent and numerical optimization
+- Constrained optimization (Lagrange multipliers)
+- Multi-variable optimization
+
+**Statistics:**
+- Descriptive statistics
+- Hypothesis testing (t-tests, chi-square, ANOVA)
+- Probability distributions
+- Correlation and regression analysis
+
+Why did my problem fail to solve?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Several factors can cause solution failures:
+
+**Common causes:**
+1. **Unclear problem statement** - Be specific about what you want to find
+2. **Unsupported problem type** - Check if your problem domain is supported  
+3. **API key issues** - Verify your key is valid and has sufficient credits
+4. **Complex notation** - Try simplifying or using standard mathematical notation
+5. **Network connectivity** - Ensure stable internet connection
+
+**How to improve success rate:**
+- Use clear, standard mathematical notation
+- Break complex problems into smaller steps
+- Specify exactly what you want to find
+- Include all necessary information (constraints, domains, etc.)
+- Try rephrasing if the first attempt fails
+
+**Example of unclear vs. clear:**
+- ❌ Unclear: "solve this equation"
+- ✅ Clear: "solve for x: 2x + 5 = 13"
+
+Can it handle word problems?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Yes! The system is designed to understand mathematical problems described in natural language.
+
+**Examples of supported word problems:**
+
+**Physics:**
+.. code-block:: text
+
+   A ball is thrown upward with initial velocity 20 m/s. When will it return to the ground?
+
+**Economics:**
+.. code-block:: text
+
+   If I invest $1000 at 5% annual interest compounded monthly, how much will I have after 10 years?
+
+**Geometry:**
+.. code-block:: text
+
+   What is the area of a circle with radius 5 meters?
+
+**Optimization:**
+.. code-block:: text
+
+   A farmer has 100 meters of fence. What dimensions should a rectangular pen be to maximize area?
+
+**Tips for word problems:**
+- Include all given information
+- Clearly state what you want to find
+- Use standard units
+- Specify any constraints or assumptions
+
+How accurate are the solutions?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The Math AI Agent prioritizes accuracy through multiple verification layers:
+
+**Accuracy measures:**
+- **Symbolic computations**: Exact when using SymPy (computer algebra system)
+- **Numerical computations**: Typically accurate to 12-15 decimal places
+- **Verification confidence**: System reports confidence level for each solution
+- **Error detection**: Automatically flags uncertain or potentially incorrect results
+
+**When solutions are most accurate:**
+- Well-defined mathematical problems
+- Standard notation and clear problem statements
+- Problems within supported domains
+- Sufficient context and constraints provided
+
+**When to double-check:**
+- Low verification confidence (<70%)
+- Critical applications (engineering, finance)
+- Unusual or edge-case problems
+- Results that seem counterintuitive
+
+Usage and Interface
+-------------------
+
+How do I enter mathematical expressions?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The system accepts multiple input formats:
+
+**Plain text:**
+.. code-block:: text
+
+   x^2 + 2*x + 1 = 0
+   sin(x) + cos(x)
+   integral of x^2 from 0 to 1
+
+**LaTeX notation:**
+.. code-block:: text
+
+   $x^2 + 2x + 1 = 0$
+   $\sin(x) + \cos(x)$
+   $\int_0^1 x^2 dx$
+
+**Natural language:**
+.. code-block:: text
+
+   Find the derivative of x squared plus 2x plus 1
+   What is the integral of sine of x?
+   Solve the quadratic equation x squared minus 4 equals 0
+
+**Matrix notation:**
+.. code-block:: text
+
+   [[1, 2], [3, 4]]
+   determinant of [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+
+Can I save my solutions?
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Currently, solutions are not automatically saved. However, you can:
+
+**Manual saving options:**
+- Copy and paste solutions to your own documents
+- Save the entire webpage (Ctrl+S or Cmd+S)
+- Take screenshots of visualizations
+- Print solutions to PDF
+
+**Future features (planned):**
+- Solution history
+- Export to LaTeX/PDF
+- Shareable solution links
+- Workspace saving
+
+Why don't I see a visualization for my problem?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Visualizations are automatically generated when relevant, but not all problems have meaningful visual representations.
+
+**Problems that typically get visualizations:**
+- Function plots (calculus, algebra)
+- Matrix heatmaps (linear algebra)
+- Optimization paths (gradient descent)
+- Statistical distributions and plots
+- Geometric shapes and diagrams
+
+**Problems without visualizations:**
+- Simple arithmetic
+- Pure algebraic manipulations
+- Some abstract mathematical concepts
+- Text-based statistical results
+
+**Troubleshooting visualization issues:**
+- Check the "Visualização" tab
+- Wait a moment for complex plots to render
+- Refresh the page if plots don't appear
+- Some plots may require specific browsers or settings
+
+Can I use this for homework or exams?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Academic integrity considerations:**
+
+**Appropriate use:**
+- Learning mathematical concepts and methods
+- Checking your own work for accuracy
+- Understanding solution steps and reasoning
+- Exploring different approaches to problems
+- Practicing with similar problems
+
+**Inappropriate use:**
+- Submitting AI-generated solutions as your own work
+- Using during closed-book exams without permission
+- Bypassing the learning process
+- Violating your institution's academic integrity policies
+
+**Recommended approach:**
+1. Attempt problems yourself first
+2. Use the system to check your work
+3. Study the solution steps to understand methods
+4. Practice similar problems independently
+5. Always follow your instructor's guidelines
+
+Troubleshooting
+---------------
+
+The system is running slowly
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Common causes and solutions:**
+
+**Network issues:**
+- Check your internet connection stability
+- Try refreshing the page
+- Close other bandwidth-intensive applications
+
+**Complex problems:**
+- Large matrix operations take more time
+- Multi-step optimization problems require patience
+- Consider breaking complex problems into smaller parts
+
+**API rate limits:**
+- OpenAI has usage limits that may cause delays
+- Wait a moment and try again
+- Check your OpenAI account for any issues
+
+**Browser issues:**
+- Clear browser cache and cookies
+- Try a different browser
+- Disable browser extensions that might interfere
+
+I'm getting error messages
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Common error types and solutions:**
+
+**"Invalid API Key":**
+- Verify your key starts with 'sk-'
+- Check that the key is active on OpenAI's platform
+- Ensure you have sufficient API credits
+- Try regenerating your API key
+
+**"Problem parsing failed":**
+- Use clearer mathematical notation
+- Avoid ambiguous expressions
+- Include all necessary context
+- Try rephrasing the problem
+
+**"Solution pipeline failed":**
+- Check your internet connection
+- Verify your API key is working
+- Try a simpler version of the problem first
+- Report persistent issues to support
+
+**"No visualization available":**
+- Not all problems have visual representations
+- Check if you're looking in the right tab
+- Some plots may take time to generate
+
+The mathematics looks wrong
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**If you suspect an error:**
+
+**First steps:**
+1. Check the verification status and confidence level
+2. Look for any warnings in the solution
+3. Try rephrasing the problem to ensure correct interpretation
+4. Verify your input was parsed correctly
+
+**Reporting issues:**
+- Include the exact problem statement you used
+- Note any error messages or warnings
+- Specify what result you expected vs. what you got
+- Provide context about the mathematical domain
+
+**Getting help:**
+- Check similar examples in the tutorials
+- Try breaking the problem into smaller steps
+- Consult mathematical references for verification
+- Report bugs through the appropriate channels
+
+Advanced Usage
+--------------
+
+Can I integrate this into my own applications?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The system is primarily designed as a web application, but there are options for integration:
+
+**Current options:**
+- Use the Docker container in your infrastructure
+- Adapt the Python codebase for your needs
+- Build on the open-source components
+
+**API considerations:**
+- The system requires OpenAI API access
+- You'll need to handle API key management
+- Consider rate limiting and cost management
+
+**Future possibilities:**
+- Dedicated API endpoints
+- SDK for popular programming languages
+- Webhook integrations
+- Batch processing capabilities
+
+How can I contribute to the project?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+We welcome contributions! Here's how you can help:
+
+**Code contributions:**
+- Check the developer guide for setup instructions
+- Look for issues labeled "good first issue"
+- Follow the coding standards and testing requirements
+- Submit pull requests with clear descriptions
+
+**Documentation:**
+- Help improve tutorials and examples
+- Report unclear or missing documentation
+- Translate content to other languages
+- Create video tutorials or guides
+
+**Testing and feedback:**
+- Report bugs and issues
+- Suggest new features
+- Test edge cases and unusual problems
+- Provide feedback on user experience
+
+**Community:**
+- Help other users in discussions
+- Share interesting use cases
+- Write blog posts or articles about the system
+- Present at conferences or meetups
+
+What's planned for future releases?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Upcoming features:**
+- Additional mathematical domains (differential equations, number theory)
+- Enhanced visualization capabilities
+- Solution history and workspace management
+- Mobile-optimized interface
+- Batch problem processing
+
+**Long-term goals:**
+- Advanced AI reasoning capabilities
+- Integration with educational platforms
+- Collaborative problem-solving features
+- Custom domain-specific solvers
+- Real-time collaboration tools
+
+**Stay updated:**
+- Follow the project on GitHub
+- Join community discussions
+- Subscribe to release notifications
+- Check the roadmap for detailed plans
+
+Getting Help
+------------
+
+Where can I get more help?
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+**Documentation:**
+- Start with the :doc:`quickstart` guide
+- Check domain-specific tutorials
+- Read the :doc:`developer_guide` for technical details
+
+**Community support:**
+- GitHub discussions for general questions
+- Issue tracker for bug reports
+- Community forums and chat rooms
+
+**Professional support:**
+- Commercial support options available
+- Custom development and integration services
+- Training and consultation services
+
+**Contact information:**
+- GitHub: [project repository]
+- Email: [support email]
+- Community: [discussion links]
+
+Remember: The Math AI Agent is a powerful tool, but it's designed to assist and enhance your mathematical understanding, not replace the learning process. Use it wisely to become a better problem solver! 🧮✨

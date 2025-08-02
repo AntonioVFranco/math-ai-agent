@@ -4,7 +4,7 @@ Pydantic Models for Mathematical Problem Parser
 This module defines the data structures used by the mathematical problem parser
 to represent parsed problems in a structured format.
 
-Author: MathBoardAI Agent Team  
+Author: Math AI Agent Team  
 Task ID: CORE-002 / F1
 """
 

@@ -1,1 +1,1351 @@
-""" MathBoardAI Agent - Core Solution Engine The central orchestrator that connects all components of the math-ai-agent system. This engine coordinates the problem parsing, OpenAI reasoning, SymPy calculations, and final synthesis to deliver complete mathematical solutions. Author: MathBoardAI Agent Team Task ID: ENGINE-001 (Core of Sprint 2) """ import json import logging import os import time from typing import Dict, List, Any, Optional, Tuple from dataclasses import dataclass from pathlib import Path import openai from openai import OpenAI # Import our custom modules from .parser import MathematicalProblemParser, get_parser from .models import ParsedProblem, MathDomain, ProblemType try: from ..mcps.sympy_client import SymPyMCPClient except ImportError: # Fallback for direct execution from mcps.sympy_client import SymPyMCPClient try: from ..solvers.linear_algebra_solver import get_solver as get_linear_algebra_solver except ImportError: # Fallback for direct execution from solvers.linear_algebra_solver import get_solver as get_linear_algebra_solver try: from .verifier import get_verifier, VerificationResult, VerificationMethod except ImportError: # Fallback for direct execution from verifier import get_verifier, VerificationResult, VerificationMethod try: from ..interface.visualizer import get_visualizer except ImportError: # Fallback for direct execution from interface.visualizer import get_visualizer try: from ..solvers.stats_solver import ( calculate_descriptive_stats, get_distribution_details, perform_t_test, generate_random_variates, perform_normality_test, calculate_correlation ) except ImportError: # Fallback for direct execution from solvers.stats_solver import ( calculate_descriptive_stats, get_distribution_details, perform_t_test, generate_random_variates, perform_normality_test, calculate_correlation ) try: from ..solvers.optimization_solver import get_solver as get_optimization_solver except ImportError: # Fallback for direct execution from solvers.optimization_solver import get_solver as get_optimization_solver # Configure logging logging.basicConfig(level=logging.INFO) logger = logging.getLogger(__name__) @dataclass class ExecutionStep: """Represents a single step in the solution execution.""" step_number: int step_type: str # 'explanation' or 'tool_call' content: Optional[str] = None tool: Optional[str] = None command: Optional[str] = None args: Optional[Dict[str, Any]] = None result: Optional[Dict[str, Any]] = None execution_time_ms: Optional[float] = None success: bool = True error_message: Optional[str] = None @dataclass class PipelineResult: """Result of the complete solution pipeline.""" success: bool final_answer: Optional[str] = None error_message: Optional[str] = None parsed_problem: Optional[ParsedProblem] = None execution_steps: List[ExecutionStep] = None verification_result: Optional[VerificationResult] = None plot_object: Optional[Any] = None # Plotly Figure or Matplotlib Figure total_execution_time_ms: Optional[float] = None openai_calls: int = 0 sympy_calls: int = 0 class MathAIEngine: """ Core engine that orchestrates the complete mathematical problem-solving pipeline. This engine integrates: - Problem parsing and analysis - OpenAI GPT-4o for reasoning and planning - SymPy MCP for precise calculations - Result synthesis and formatting """ def __init__(self, openai_api_key: str): """ Initialize the Math AI Engine. Args: openai_api_key: OpenAI API key for GPT-4o access """ self.openai_client = OpenAI(api_key=openai_api_key) self.parser = get_parser() self.sympy_client = SymPyMCPClient() self.linear_algebra_solver = get_linear_algebra_solver() self.optimization_solver = get_optimization_solver(self.sympy_client) self.verifier = get_verifier() self.visualizer = get_visualizer() # Load prompt templates self._load_prompt_templates() # Statistics self.total_problems_solved = 0 self.total_execution_time = 0.0 logger.info("Math AI Engine initialized successfully") def _load_prompt_templates(self) -> None: """Load prompt templates from files.""" try: prompts_dir = Path(__file__).parent.parent.parent / "prompts" # Load planning prompt planning_path = prompts_dir / "planning_prompt.txt" if planning_path.exists(): with open(planning_path, 'r', encoding='utf-8') as f: self.planning_prompt_template = f.read() else: logger.warning("Planning prompt template not found, using default") self.planning_prompt_template = self._get_default_planning_prompt() # Load synthesis prompt synthesis_path = prompts_dir / "synthesis_prompt.txt" if synthesis_path.exists(): with open(synthesis_path, 'r', encoding='utf-8') as f: self.synthesis_prompt_template = f.read() else: logger.warning("Synthesis prompt template not found, using default") self.synthesis_prompt_template = self._get_default_synthesis_prompt() except Exception as e: logger.error(f"Error loading prompt templates: {e}") self.planning_prompt_template = self._get_default_planning_prompt() self.synthesis_prompt_template = self._get_default_synthesis_prompt() def _get_default_planning_prompt(self) -> str: """Default planning prompt if file is not available.""" return """You are a mathematical AI assistant. Create a step-by-step solution plan for the given problem. Problem: {original_problem} Domain: {domain} Type: {problem_type} Variables: {variables} Expression: {expression} Respond with a JSON plan containing steps with types 'explanation' or 'tool_call'. Available tools: - SymPy MCP: solve_equation, simplify_expression, compute_derivative, compute_integral, matrix_operations, numerical_verification, to_latex - Linear Algebra Solver: compute_determinant, compute_inverse, lu_decomposition, qr_decomposition, eigen_decomposition, svd - Optimization Solver: gradient_descent, find_critical_points For linear algebra operations (determinant, inverse, LU, QR, SVD, eigenvalues), use the linear_algebra_solver tool. For optimization problems (minimize, maximize, gradient descent), use the optimization_solver tool. For symbolic math operations, use the sympy_mcp tool. Format: { "plan": [ {"type": "explanation", "content": "explanation text"}, {"type": "tool_call", "tool": "linear_algebra_solver", "command": "compute_determinant", "args": {"matrix": [[1,2],[3,4]]}}, {"type": "tool_call", "tool": "optimization_solver", "command": "gradient_descent", "args": {"function_expr": "(x-10)**2", "variables": ["x"], "initial_point": [0.0]}}, {"type": "tool_call", "tool": "sympy_mcp", "command": "tool_name", "args": {"arg1": "value1"}} ] }""" def _get_default_synthesis_prompt(self) -> str: """Default synthesis prompt if file is not available.""" return """Create a comprehensive final answer in Markdown format with LaTeX notation. Original Problem: {original_problem} Execution Log: {execution_log} Results: {computation_results} Verification: {verification_summary} Provide a complete solution with: 1. Problem restatement 2. Solution approach 3. Step-by-step solution with LaTeX 4. Final answer (highlighted) 5. Verification status (include verification details - this is a key differentiator!) IMPORTANT: Always include the verification status prominently in your answer. Use for verified solutions and for unverified ones. This builds user trust and demonstrates mathematical rigor.""" def execute_solution_pipeline(self, problem_text: str, api_key: str) -> PipelineResult: """ Execute the complete solution pipeline for a mathematical problem. This is the main entry point that orchestrates: 1. Problem parsing and analysis 2. Solution planning with OpenAI 3. Plan execution with tool calls 4. Final synthesis and formatting Args: problem_text: The mathematical problem to solve api_key: OpenAI API key Returns: PipelineResult containing the complete solution or error information """ start_time = time.time() try: # Update OpenAI client if different API key provided if api_key != self.openai_client.api_key: self.openai_client = OpenAI(api_key=api_key) logger.info(f"Starting solution pipeline for: {problem_text[:100]}...") # Step A: Parse the problem logger.info("Step A: Parsing problem...") parsed_problem = self._parse_problem(problem_text) if not parsed_problem: return PipelineResult( success=False, error_message="Failed to parse the mathematical problem" ) # Step B: Create solution plan with OpenAI logger.info("Step B: Creating solution plan...") plan, openai_calls = self._create_solution_plan(parsed_problem) if not plan: return PipelineResult( success=False, error_message="Failed to create solution plan", parsed_problem=parsed_problem ) # Step C: Execute the plan logger.info("Step C: Executing solution plan...") execution_steps, sympy_calls = self._execute_plan(plan) # Step D: Verify the solution logger.info("Step D: Verifying solution...") verification_result = self._verify_solution(parsed_problem, execution_steps) # Step E: Generate visualization logger.info("Step E: Generating visualization...") plot_object = self._generate_visualization(parsed_problem, execution_steps) # Step F: Synthesize final answer logger.info("Step F: Synthesizing final answer...") final_answer, synthesis_calls = self._synthesize_final_answer( parsed_problem, execution_steps, verification_result ) end_time = time.time() total_time_ms = (end_time - start_time) * 1000 # Update statistics self.total_problems_solved += 1 self.total_execution_time += total_time_ms logger.info(f"Pipeline completed successfully in {total_time_ms:.2f}ms") return PipelineResult( success=True, final_answer=final_answer, parsed_problem=parsed_problem, execution_steps=execution_steps, verification_result=verification_result, plot_object=plot_object, total_execution_time_ms=total_time_ms, openai_calls=openai_calls + synthesis_calls, sympy_calls=sympy_calls ) except Exception as e: end_time = time.time() total_time_ms = (end_time - start_time) * 1000 logger.error(f"Pipeline failed: {str(e)}") return PipelineResult( success=False, error_message=f"Pipeline execution failed: {str(e)}", total_execution_time_ms=total_time_ms ) def _parse_problem(self, problem_text: str) -> Optional[ParsedProblem]: """ Parse the mathematical problem using the problem parser. Args: problem_text: The problem text to parse Returns: ParsedProblem object or None if parsing fails """ try: parsed = self.parser.parse(problem_text) logger.info(f"Problem parsed successfully:") logger.info(f" Domain: {parsed.domain}") logger.info(f" Type: {parsed.problem_type}") logger.info(f" Variables: {parsed.variables}") logger.info(f" Expression: {parsed.expression}") logger.info(f" Confidence: {parsed.confidence.overall:.2f}") return parsed except Exception as e: logger.error(f"Problem parsing failed: {str(e)}") return None def _create_solution_plan(self, parsed_problem: ParsedProblem) -> Tuple[Optional[List[Dict]], int]: """ Create a solution plan using OpenAI GPT-4o. Args: parsed_problem: The parsed problem object Returns: Tuple of (plan_steps, openai_calls_made) """ try: # Prepare the prompt prompt = self.planning_prompt_template.format( original_problem=parsed_problem.original_text, domain=parsed_problem.domain.value, problem_type=parsed_problem.problem_type.value, variables=', '.join(parsed_problem.variables) if parsed_problem.variables else 'None', expression=parsed_problem.expression or 'None', confidence=f"{parsed_problem.confidence.overall:.2f}" ) # Make OpenAI API call response = self.openai_client.chat.completions.create( model="gpt-4o", messages=[ { "role": "system", "content": "You are a specialized mathematical AI assistant. Always respond with valid JSON." }, { "role": "user", "content": prompt } ], temperature=0.1, max_tokens=2000 ) # Parse the JSON response response_content = response.choices[0].message.content.strip() # Clean up the response if it's wrapped in markdown code blocks if response_content.startswith('```json'): response_content = response_content[7:] # Remove ```json if response_content.endswith('```'): response_content = response_content[:-3] # Remove ``` plan_data = json.loads(response_content) plan_steps = plan_data.get('plan', []) logger.info(f"Created solution plan with {len(plan_steps)} steps") return plan_steps, 1 except json.JSONDecodeError as e: logger.error(f"Failed to parse OpenAI JSON response: {e}") return None, 1 except Exception as e: logger.error(f"Failed to create solution plan: {str(e)}") return None, 1 def _execute_plan(self, plan_steps: List[Dict]) -> Tuple[List[ExecutionStep], int]: """ Execute the solution plan step by step. Args: plan_steps: List of plan steps from OpenAI Returns: Tuple of (execution_steps, sympy_calls_made) """ execution_steps = [] sympy_calls = 0 for i, step in enumerate(plan_steps): step_start_time = time.time() step_type = step.get('type', 'unknown') if step_type == 'explanation': # Handle explanation steps execution_step = ExecutionStep( step_number=i + 1, step_type='explanation', content=step.get('content', ''), success=True ) elif step_type == 'tool_call': # Handle tool call steps execution_step = self._execute_tool_call(i + 1, step) if execution_step.success: sympy_calls += 1 else: # Handle unknown step types execution_step = ExecutionStep( step_number=i + 1, step_type='error', success=False, error_message=f"Unknown step type: {step_type}" ) step_end_time = time.time() execution_step.execution_time_ms = (step_end_time - step_start_time) * 1000 execution_steps.append(execution_step) logger.info(f"Step {i+1} ({step_type}): {'Success' if execution_step.success else 'Failed'}") return execution_steps, sympy_calls def _execute_tool_call(self, step_number: int, step: Dict) -> ExecutionStep: """ Execute a single tool call step. Args: step_number: The step number step: The step dictionary containing tool call information Returns: ExecutionStep with the result of the tool call """ try: tool = step.get('tool', '') command = step.get('command', '') args = step.get('args', {}) description = step.get('description', '') # Handle different tool types if tool == 'sympy_mcp': return self._execute_sympy_tool_call(step_number, step) elif tool == 'linear_algebra_solver': return self._execute_linear_algebra_tool_call(step_number, step) elif tool == 'stats_solver': return self._execute_stats_solver_tool_call(step_number, step) elif tool == 'optimization_solver': return self._execute_optimization_solver_tool_call(step_number, step) else: return ExecutionStep( step_number=step_number, step_type='tool_call', tool=tool, command=command, args=args, success=False, error_message=f"Unknown tool: {tool}" ) except Exception as e: logger.error(f"Tool call execution failed: {str(e)}") return ExecutionStep( step_number=step_number, step_type='tool_call', tool=step.get('tool', ''), command=step.get('command', ''), args=step.get('args', {}), success=False, error_message=str(e) ) def _execute_sympy_tool_call(self, step_number: int, step: Dict) -> ExecutionStep: """ Execute a SymPy MCP tool call. Args: step_number: The step number step: The step dictionary containing tool call information Returns: ExecutionStep with the result of the SymPy tool call """ try: command = step.get('command', '') args = step.get('args', {}) description = step.get('description', '') # Map commands to SymPy client methods command_mapping = { 'solve_equation': self.sympy_client.solve_equation, 'simplify_expression': self.sympy_client.simplify_expression, 'compute_derivative': self.sympy_client.compute_derivative, 'compute_integral': self.sympy_client.compute_integral, 'matrix_operations': self.sympy_client.matrix_operations, 'numerical_verification': self.sympy_client.numerical_verification, 'to_latex': self.sympy_client.to_latex } if command not in command_mapping: return ExecutionStep( step_number=step_number, step_type='tool_call', tool='sympy_mcp', command=command, args=args, success=False, error_message=f"Unknown SymPy command: {command}" ) # Execute the tool call method = command_mapping[command] # Handle different argument patterns if command in ['solve_equation', 'simplify_expression', 'to_latex']: result = method(args.get('expression', '')) elif command == 'compute_derivative': result = method( args.get('expression', ''), args.get('variable', 'x') ) elif command == 'compute_integral': result = method( args.get('expression', ''), args.get('variable', 'x'), args.get('lower_limit'), args.get('upper_limit') ) elif command == 'matrix_operations': result = method( args.get('matrix_data', ''), args.get('operation', '') ) elif command == 'numerical_verification': result = method( args.get('original_expression', ''), args.get('symbolic_result', ''), args.get('num_tests', 10) ) else: result = method(**args) # Create execution step return ExecutionStep( step_number=step_number, step_type='tool_call', content=description, tool='sympy_mcp', command=command, args=args, result=result, success=result.get('status') == 'success' if isinstance(result, dict) else True ) except Exception as e: logger.error(f"SymPy tool call execution failed: {str(e)}") return ExecutionStep( step_number=step_number, step_type='tool_call', tool='sympy_mcp', command=step.get('command', ''), args=step.get('args', {}), success=False, error_message=str(e) ) def _execute_linear_algebra_tool_call(self, step_number: int, step: Dict) -> ExecutionStep: """ Execute a linear algebra solver tool call. Args: step_number: The step number step: The step dictionary containing tool call information Returns: ExecutionStep with the result of the linear algebra tool call """ try: command = step.get('command', '') args = step.get('args', {}) description = step.get('description', '') # Map commands to linear algebra solver methods command_mapping = { 'compute_determinant': self.linear_algebra_solver.compute_determinant, 'compute_inverse': self.linear_algebra_solver.compute_inverse, 'lu_decomposition': self.linear_algebra_solver.lu_decomposition, 'qr_decomposition': self.linear_algebra_solver.qr_decomposition, 'eigen_decomposition': self.linear_algebra_solver.eigen_decomposition, 'svd': self.linear_algebra_solver.svd } if command not in command_mapping: return ExecutionStep( step_number=step_number, step_type='tool_call', tool='linear_algebra_solver', command=command, args=args, success=False, error_message=f"Unknown linear algebra command: {command}" ) # Execute the tool call method = command_mapping[command] # All linear algebra methods take a matrix as the first argument matrix = args.get('matrix', []) result = method(matrix) # Create execution step return ExecutionStep( step_number=step_number, step_type='tool_call', content=description, tool='linear_algebra_solver', command=command, args=args, result=result, success=result.get('success', False) ) except Exception as e: logger.error(f"Linear algebra tool call execution failed: {str(e)}") return ExecutionStep( step_number=step_number, step_type='tool_call', tool='linear_algebra_solver', command=step.get('command', ''), args=step.get('args', {}), success=False, error_message=str(e) ) def _execute_stats_solver_tool_call(self, step_number: int, step: Dict) -> ExecutionStep: """ Execute a statistics solver tool call. Args: step_number: The step number step: The step dictionary containing tool call information Returns: ExecutionStep with the result of the statistics tool call """ try: command = step.get('command', '') args = step.get('args', {}) description = step.get('description', '') # Map commands to statistics solver functions command_mapping = { 'calculate_descriptive_stats': calculate_descriptive_stats, 'get_distribution_details': get_distribution_details, 'perform_t_test': perform_t_test, 'generate_random_variates': generate_random_variates, 'perform_normality_test': perform_normality_test, 'calculate_correlation': calculate_correlation } if command not in command_mapping: return ExecutionStep( step_number=step_number, step_type='tool_call', tool='stats_solver', command=command, args=args, success=False, error_message=f"Unknown statistics command: {command}" ) # Execute the tool call with appropriate arguments method = command_mapping[command] try: if command == 'calculate_descriptive_stats': data = args.get('data', []) result = method(data) elif command == 'get_distribution_details': dist_name = args.get('distribution', '') params = args.get('parameters', {}) points = args.get('points', []) result = method(dist_name, params, points) elif command == 'perform_t_test': sample_a = args.get('sample_a', []) sample_b = args.get('sample_b', []) equal_var = args.get('equal_var', True) result = method(sample_a, sample_b, equal_var) elif command == 'generate_random_variates': dist_name = args.get('distribution', '') params = args.get('parameters', {}) size = args.get('size', 100) result = method(dist_name, params, size) elif command == 'perform_normality_test': data = args.get('data', []) test_type = args.get('test_type', 'shapiro') result = method(data, test_type) elif command == 'calculate_correlation': x_data = args.get('x_data', []) y_data = args.get('y_data', []) method_type = args.get('method', 'pearson') result = method(x_data, y_data, method_type) else: # Fallback: try to call with all args result = method(**args) except Exception as e: result = { 'success': False, 'error': f"Statistics calculation failed: {str(e)}", 'error_type': type(e).__name__ } # Create execution step return ExecutionStep( step_number=step_number, step_type='tool_call', content=description, tool='stats_solver', command=command, args=args, result=result, success=result.get('success', False) ) except Exception as e: logger.error(f"Statistics tool call execution failed: {str(e)}") return ExecutionStep( step_number=step_number, step_type='tool_call', tool='stats_solver', command=step.get('command', ''), args=step.get('args', {}), success=False, error_message=str(e) ) def _execute_optimization_solver_tool_call(self, step_number: int, step: Dict) -> ExecutionStep: """ Execute an optimization solver tool call. Args: step_number: The step number step: The step dictionary containing tool call information Returns: ExecutionStep with the result of the optimization tool call """ try: command = step.get('command', '') args = step.get('args', {}) description = step.get('description', '') # Handle different optimization commands if command == 'gradient_descent': function_expr = args.get('function_expr', '') variables = args.get('variables', []) initial_point = args.get('initial_point', []) learning_rate = args.get('learning_rate', 0.1) max_iterations = args.get('max_iterations', 1000) tolerance = args.get('tolerance', 1e-6) adaptive_lr = args.get('adaptive_lr', False) momentum = args.get('momentum', 0.0) record_history = args.get('record_history', True) result = self.optimization_solver.gradient_descent( function_expr=function_expr, variables=variables, initial_point=initial_point, learning_rate=learning_rate, max_iterations=max_iterations, tolerance=tolerance, adaptive_lr=adaptive_lr, momentum=momentum, record_history=record_history ) # Convert OptimizationResult to dict for consistency result_dict = result.to_dict() elif command == 'find_critical_points': function_expr = args.get('function_expr', '') variables = args.get('variables', []) search_region = args.get('search_region', None) num_starting_points = args.get('num_starting_points', 10) result_dict = self.optimization_solver.find_critical_points( function_expr=function_expr, variables=variables, search_region=search_region, num_starting_points=num_starting_points ) else: return ExecutionStep( step_number=step_number, step_type='tool_call', tool='optimization_solver', command=command, args=args, success=False, error_message=f"Unknown optimization command: {command}" ) # Create execution step return ExecutionStep( step_number=step_number, step_type='tool_call', content=description, tool='optimization_solver', command=command, args=args, result=result_dict, success=result_dict.get('success', False) ) except Exception as e: logger.error(f"Optimization tool call execution failed: {str(e)}") return ExecutionStep( step_number=step_number, step_type='tool_call', tool='optimization_solver', command=step.get('command', ''), args=step.get('args', {}), success=False, error_message=str(e) ) def _verify_solution(self, parsed_problem: ParsedProblem, execution_steps: List[ExecutionStep]) -> VerificationResult: """ Verify the solution using the multi-layer verification system. Args: parsed_problem: The original parsed problem execution_steps: List of executed steps containing solutions Returns: VerificationResult containing verification status and details """ try: # Extract the main solution from successful execution steps main_solution = {} for step in execution_steps: if step.success and step.result: # Merge results from all successful steps main_solution.update(step.result) # Add original matrix information if available if parsed_problem.expression and '[' in parsed_problem.expression: try: # Try to extract matrix from expression import re matrix_match = re.search(r'\[\[.*?\]\]', parsed_problem.expression) if matrix_match: matrix_str = matrix_match.group() # Convert string representation to actual matrix matrix = eval(matrix_str) # Note: In production, use safer parsing main_solution['original_matrix'] = matrix except: pass # Ignore parsing errors # Verify the solution verification_result = self.verifier.verify_solution(parsed_problem, main_solution) logger.info(f"Solution verification: {verification_result.is_verified} " f"(confidence: {verification_result.confidence:.3f})") return verification_result except Exception as e: logger.error(f"Solution verification failed: {str(e)}") return VerificationResult( is_verified=False, confidence=0.0, method=VerificationMethod.UNKNOWN, details=f"Verification failed: {str(e)}", execution_time_ms=0.0, warnings=[f"Verification error: {str(e)}"] ) def _generate_visualization(self, parsed_problem: ParsedProblem, execution_steps: List[ExecutionStep]) -> Optional[Any]: """ Generate visualization for the mathematical problem and solution. Args: parsed_problem: The original parsed problem execution_steps: List of executed steps containing solutions Returns: Plot object (Plotly Figure or Matplotlib Figure) or None if no visualization needed """ try: logger.info(f"Determining visualization for {parsed_problem.problem_type.value} problem") # Check if visualization is appropriate for this problem type if not self._should_visualize(parsed_problem): logger.info("No visualization needed for this problem type") return None # Extract solution data from execution steps solution_data = {} for step in execution_steps: if step.success and step.result: solution_data.update(step.result) # Generate visualization based on problem type and domain if parsed_problem.domain == MathDomain.LINEAR_ALGEBRA: return self._create_linear_algebra_visualization(parsed_problem, solution_data) elif parsed_problem.domain == MathDomain.CALCULUS: return self._create_function_visualization(parsed_problem, solution_data) elif parsed_problem.domain == MathDomain.ALGEBRA: return self._create_algebraic_visualization(parsed_problem, solution_data) elif parsed_problem.domain == MathDomain.OPTIMIZATION: return self._create_optimization_visualization(parsed_problem, solution_data) else: # Try to detect if we can create a function plot if parsed_problem.expression and any(var in parsed_problem.expression for var in ['x', 'y', 't']): return self._create_function_visualization(parsed_problem, solution_data) logger.info("No suitable visualization method found") return None except Exception as e: logger.error(f"Visualization generation failed: {str(e)}") return None def _should_visualize(self, parsed_problem: ParsedProblem) -> bool: """Determine if the problem should be visualized.""" # Always visualize linear algebra problems with matrices if parsed_problem.domain == MathDomain.LINEAR_ALGEBRA: if parsed_problem.problem_type in [ ProblemType.DETERMINANT, ProblemType.INVERSE, ProblemType.LU_DECOMPOSITION, ProblemType.QR_DECOMPOSITION, ProblemType.SVD, ProblemType.EIGEN_DECOMPOSITION ]: return True # Visualize functions and calculus problems if parsed_problem.domain == MathDomain.CALCULUS: return True # Visualize optimization problems if parsed_problem.domain == MathDomain.OPTIMIZATION: return True # Visualize algebraic functions if parsed_problem.expression and any(var in parsed_problem.expression for var in ['x', 'y', 't']): return True # Check for explicit plotting requests plot_keywords = ['plot', 'graph', 'visualize', 'draw', 'show'] if any(keyword in parsed_problem.original_text.lower() for keyword in plot_keywords): return True return False def _create_linear_algebra_visualization(self, parsed_problem: ParsedProblem, solution_data: Dict[str, Any]) -> Optional[Any]: """Create visualization for linear algebra problems.""" try: # Matrix heatmap for determinant/inverse problems if parsed_problem.problem_type in [ProblemType.DETERMINANT, ProblemType.INVERSE]: if 'original_matrix' in solution_data: matrix = solution_data['original_matrix'] title = f"Matrix for {parsed_problem.problem_type.value.replace('_', ' ').title()}" return self.visualizer.plot_matrix_heatmap(matrix, title=title) elif parsed_problem.expression and '[' in parsed_problem.expression: # Try to extract matrix from expression import re matrix_match = re.search(r'\[\[.*?\]\]', parsed_problem.expression) if matrix_match: try: matrix = eval(matrix_match.group()) title = f"Matrix for {parsed_problem.problem_type.value.replace('_', ' ').title()}" return self.visualizer.plot_matrix_heatmap(matrix, title=title) except: pass # Matrix decomposition visualization elif parsed_problem.problem_type in [ProblemType.LU_DECOMPOSITION, ProblemType.QR_DECOMPOSITION, ProblemType.SVD]: decomposition_matrices = {} if parsed_problem.problem_type == ProblemType.LU_DECOMPOSITION: for key in ['P', 'L', 'U']: if key in solution_data: decomposition_matrices[key] = solution_data[key] if decomposition_matrices: return self.visualizer.plot_matrix_decomposition( decomposition_matrices, "LU" ) elif parsed_problem.problem_type == ProblemType.QR_DECOMPOSITION: for key in ['Q', 'R']: if key in solution_data: decomposition_matrices[key] = solution_data[key] if decomposition_matrices: return self.visualizer.plot_matrix_decomposition( decomposition_matrices, "QR" ) elif parsed_problem.problem_type == ProblemType.SVD: for key in ['U', 'Vh']: if key in solution_data: decomposition_matrices[key] = solution_data[key] if decomposition_matrices: return self.visualizer.plot_matrix_decomposition( decomposition_matrices, "SVD" ) # Eigenvalue visualization elif parsed_problem.problem_type == ProblemType.EIGEN_DECOMPOSITION: if 'eigenvalues_real' in solution_data: eigenvals_real = solution_data['eigenvalues_real'] eigenvals_imag = solution_data.get('eigenvalues_imag', [0]*len(eigenvals_real)) # Convert to complex numbers eigenvals = [complex(r, i) for r, i in zip(eigenvals_real, eigenvals_imag)] return self.visualizer.plot_eigenvalues(eigenvals) return None except Exception as e: logger.error(f"Linear algebra visualization failed: {e}") return None def _create_function_visualization(self, parsed_problem: ParsedProblem, solution_data: Dict[str, Any]) -> Optional[Any]: """Create visualization for function-based problems.""" try: expression = parsed_problem.expression if not expression: return None # Determine variable variables = parsed_problem.variables if variables: variable = variables[0] elif 'x' in expression: variable = 'x' elif 't' in expression: variable = 't' else: variable = 'x' # Default # Create appropriate title if parsed_problem.problem_type == ProblemType.DIFFERENTIATE: title = f"Original Function: f({variable}) = {expression}" elif parsed_problem.problem_type == ProblemType.INTEGRATE: title = f"Integrand: f({variable}) = {expression}" else: title = f"Function: f({variable}) = {expression}" return self.visualizer.plot_function_2d( expression, variable=variable, title=title ) except Exception as e: logger.error(f"Function visualization failed: {e}") return None def _create_algebraic_visualization(self, parsed_problem: ParsedProblem, solution_data: Dict[str, Any]) -> Optional[Any]: """Create visualization for algebraic problems.""" try: # Only visualize if there's a meaningful expression with variables expression = parsed_problem.expression if not expression or not parsed_problem.variables: return None # For polynomial or rational expressions, create a plot return self.visualizer.plot_function_2d( expression, variable=parsed_problem.variables[0] if parsed_problem.variables else 'x', title=f"Expression: {expression}" ) except Exception as e: logger.error(f"Algebraic visualization failed: {e}") return None def _create_optimization_visualization(self, parsed_problem: ParsedProblem, solution_data: Dict[str, Any]) -> Optional[Any]: """Create visualization for optimization problems.""" try: # Check if we have convergence history for gradient descent visualization if 'convergence_history' in solution_data and solution_data['convergence_history']: history = solution_data['convergence_history'] # Extract optimization path data iterations = [entry['iteration'] for entry in history] function_values = [entry['function_value'] for entry in history] # For 1D problems, show the optimization path on the function if len(parsed_problem.variables) == 1 and parsed_problem.expression: points = [entry['point'][0] for entry in history] return self.visualizer.plot_optimization_path_1d( parsed_problem.expression, parsed_problem.variables[0], points, function_values, title=f"Gradient Descent: {parsed_problem.expression}" ) # For 2D problems, show contour plot with path elif len(parsed_problem.variables) == 2 and parsed_problem.expression: x_path = [entry['point'][0] for entry in history] y_path = [entry['point'][1] for entry in history] return self.visualizer.plot_optimization_path_2d( parsed_problem.expression, parsed_problem.variables, x_path, y_path, function_values, title=f"Gradient Descent: {parsed_problem.expression}" ) # Fallback: show convergence curve else: return self.visualizer.plot_convergence_curve( iterations, function_values, title="Optimization Convergence" ) # If no convergence history, try to plot the function being optimized elif parsed_problem.expression: if len(parsed_problem.variables) == 1: return self.visualizer.plot_function_2d( parsed_problem.expression, variable=parsed_problem.variables[0], title=f"Objective Function: {parsed_problem.expression}" ) elif len(parsed_problem.variables) == 2: return self.visualizer.plot_function_3d( parsed_problem.expression, variables=parsed_problem.variables, title=f"Objective Function: {parsed_problem.expression}" ) return None except Exception as e: logger.error(f"Optimization visualization failed: {e}") return None def _synthesize_final_answer(self, parsed_problem: ParsedProblem, execution_steps: List[ExecutionStep], verification_result: VerificationResult) -> Tuple[str, int]: """ Synthesize the final answer using OpenAI. Args: parsed_problem: The original parsed problem execution_steps: List of executed steps verification_result: Result of solution verification Returns: Tuple of (final_answer, openai_calls_made) """ try: # Prepare execution log execution_log = [] computation_results = [] for step in execution_steps: if step.step_type == 'explanation': execution_log.append(f"Step {step.step_number}: {step.content}") elif step.step_type == 'tool_call': if step.success and step.result: execution_log.append( f"Step {step.step_number}: {step.content or step.command} -> Success" ) computation_results.append({ 'step': step.step_number, 'command': step.command, 'result': step.result }) else: execution_log.append( f"Step {step.step_number}: {step.command} -> Failed: {step.error_message}" ) # Prepare verification summary verification_summary = f"Verification Status: {' VERIFIED' if verification_result.is_verified else ' NOT VERIFIED'}\n" verification_summary += f"Confidence: {verification_result.confidence:.1%}\n" verification_summary += f"Method: {verification_result.method.value.replace('_', ' ').title()}\n" verification_summary += f"Details: {verification_result.details}" if verification_result.warnings: verification_summary += f"\nWarnings: {'; '.join(verification_result.warnings)}" # Prepare the synthesis prompt prompt = self.synthesis_prompt_template.format( original_problem=parsed_problem.original_text, execution_log='\n'.join(execution_log), computation_results=json.dumps(computation_results, indent=2), verification_summary=verification_summary ) # Make OpenAI API call for synthesis response = self.openai_client.chat.completions.create( model="gpt-4o", messages=[ { "role": "system", "content": "You are a mathematical expert who creates comprehensive, well-formatted solutions using Markdown and LaTeX." }, { "role": "user", "content": prompt } ], temperature=0.2, max_tokens=3000 ) final_answer = response.choices[0].message.content.strip() logger.info("Final answer synthesized successfully") return final_answer, 1 except Exception as e: logger.error(f"Final answer synthesis failed: {str(e)}") # Fallback: create a basic summary fallback_answer = self._create_fallback_answer(parsed_problem, execution_steps, verification_result) return fallback_answer, 1 def _create_fallback_answer(self, parsed_problem: ParsedProblem, execution_steps: List[ExecutionStep], verification_result: VerificationResult) -> str: """ Create a fallback answer when synthesis fails. Args: parsed_problem: The original parsed problem execution_steps: List of executed steps verification_result: Result of solution verification Returns: Basic formatted answer """ answer_parts = [ "## Problem Statement", f"{parsed_problem.original_text}", "", "## Solution Process", "" ] for step in execution_steps: if step.success: if step.step_type == 'explanation': answer_parts.append(f"**Step {step.step_number}:** {step.content}") elif step.step_type == 'tool_call' and step.result: result = step.result if isinstance(result, dict) and 'result_latex' in result: answer_parts.append(f"**Step {step.step_number}:** ${result['result_latex']}$") elif isinstance(result, dict) and 'result_sympy' in result: answer_parts.append(f"**Step {step.step_number}:** `{result['result_sympy']}`") # Add verification information answer_parts.extend([ "", "## Verification", f"**Status:** {' Verified' if verification_result.is_verified else ' Not Verified'}", f"**Confidence:** {verification_result.confidence:.1%}", f"**Method:** {verification_result.method.value.replace('_', ' ').title()}", f"**Details:** {verification_result.details}", "", "## Note", "*Solution synthesis encountered an issue, but the computational steps above were completed successfully.*" ]) return "\n".join(answer_parts) def get_statistics(self) -> Dict[str, Any]: """Get engine performance statistics.""" avg_time = (self.total_execution_time / self.total_problems_solved if self.total_problems_solved > 0 else 0) return { 'problems_solved': self.total_problems_solved, 'total_execution_time_ms': self.total_execution_time, 'average_execution_time_ms': avg_time } # Convenience function for direct usage def execute_solution_pipeline(problem_text: str, api_key: str) -> PipelineResult: """ Execute the complete solution pipeline for a mathematical problem. This is the main entry point for the math-ai-agent system. Args: problem_text: The mathematical problem to solve api_key: OpenAI API key Returns: PipelineResult containing the complete solution or error information """ try: engine = MathAIEngine(api_key) return engine.execute_solution_pipeline(problem_text, api_key) except Exception as e: logger.error(f"Failed to execute solution pipeline: {str(e)}") return PipelineResult( success=False, error_message=f"Engine initialization or execution failed: {str(e)}" )
+"""
+Math AI Agent - Core Solution Engine
+
+The central orchestrator that connects all components of the math-ai-agent system.
+This engine coordinates the problem parsing, OpenAI reasoning, SymPy calculations,
+and final synthesis to deliver complete mathematical solutions.
+
+Author: Math AI Agent Team
+Task ID: ENGINE-001 (Core of Sprint 2)
+"""
+
+import json
+import logging
+import os
+import time
+from typing import Dict, List, Any, Optional, Tuple
+from dataclasses import dataclass
+from pathlib import Path
+
+import openai
+from openai import OpenAI
+
+# Import our custom modules
+from .parser import MathematicalProblemParser, get_parser
+from .models import ParsedProblem, MathDomain, ProblemType
+try:
+    from ..mcps.sympy_client import SymPyMCPClient
+except ImportError:
+    # Fallback for direct execution
+    from mcps.sympy_client import SymPyMCPClient
+
+try:
+    from ..solvers.linear_algebra_solver import get_solver as get_linear_algebra_solver
+except ImportError:
+    # Fallback for direct execution
+    from solvers.linear_algebra_solver import get_solver as get_linear_algebra_solver
+
+try:
+    from .verifier import get_verifier, VerificationResult, VerificationMethod
+except ImportError:
+    # Fallback for direct execution
+    from verifier import get_verifier, VerificationResult, VerificationMethod
+
+try:
+    from ..interface.visualizer import get_visualizer
+except ImportError:
+    # Fallback for direct execution
+    from interface.visualizer import get_visualizer
+
+try:
+    from ..solvers.stats_solver import (
+        calculate_descriptive_stats, get_distribution_details, 
+        perform_t_test, generate_random_variates,
+        perform_normality_test, calculate_correlation
+    )
+except ImportError:
+    # Fallback for direct execution
+    from solvers.stats_solver import (
+        calculate_descriptive_stats, get_distribution_details, 
+        perform_t_test, generate_random_variates,
+        perform_normality_test, calculate_correlation
+    )
+
+try:
+    from ..solvers.optimization_solver import get_solver as get_optimization_solver
+except ImportError:
+    # Fallback for direct execution
+    from solvers.optimization_solver import get_solver as get_optimization_solver
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ExecutionStep:
+    """Represents a single step in the solution execution."""
+    step_number: int
+    step_type: str  # 'explanation' or 'tool_call'
+    content: Optional[str] = None
+    tool: Optional[str] = None
+    command: Optional[str] = None
+    args: Optional[Dict[str, Any]] = None
+    result: Optional[Dict[str, Any]] = None
+    execution_time_ms: Optional[float] = None
+    success: bool = True
+    error_message: Optional[str] = None
+
+
+@dataclass
+class PipelineResult:
+    """Result of the complete solution pipeline."""
+    success: bool
+    final_answer: Optional[str] = None
+    error_message: Optional[str] = None
+    parsed_problem: Optional[ParsedProblem] = None
+    execution_steps: List[ExecutionStep] = None
+    verification_result: Optional[VerificationResult] = None
+    plot_object: Optional[Any] = None  # Plotly Figure or Matplotlib Figure
+    total_execution_time_ms: Optional[float] = None
+    openai_calls: int = 0
+    sympy_calls: int = 0
+
+
+class MathAIEngine:
+    """
+    Core engine that orchestrates the complete mathematical problem-solving pipeline.
+    
+    This engine integrates:
+    - Problem parsing and analysis
+    - OpenAI GPT-4o for reasoning and planning
+    - SymPy MCP for precise calculations
+    - Result synthesis and formatting
+    """
+    
+    def __init__(self, openai_api_key: str):
+        """
+        Initialize the Math AI Engine.
+        
+        Args:
+            openai_api_key: OpenAI API key for GPT-4o access
+        """
+        self.openai_client = OpenAI(api_key=openai_api_key)
+        self.parser = get_parser()
+        self.sympy_client = SymPyMCPClient()
+        self.linear_algebra_solver = get_linear_algebra_solver()
+        self.optimization_solver = get_optimization_solver(self.sympy_client)
+        self.verifier = get_verifier()
+        self.visualizer = get_visualizer()
+        
+        # Load prompt templates
+        self._load_prompt_templates()
+        
+        # Statistics
+        self.total_problems_solved = 0
+        self.total_execution_time = 0.0
+        
+        logger.info("Math AI Engine initialized successfully")
+    
+    def _load_prompt_templates(self) -> None:
+        """Load prompt templates from files."""
+        try:
+            prompts_dir = Path(__file__).parent.parent.parent / "prompts"
+            
+            # Load planning prompt
+            planning_path = prompts_dir / "planning_prompt.txt"
+            if planning_path.exists():
+                with open(planning_path, 'r', encoding='utf-8') as f:
+                    self.planning_prompt_template = f.read()
+            else:
+                logger.warning("Planning prompt template not found, using default")
+                self.planning_prompt_template = self._get_default_planning_prompt()
+            
+            # Load synthesis prompt
+            synthesis_path = prompts_dir / "synthesis_prompt.txt"
+            if synthesis_path.exists():
+                with open(synthesis_path, 'r', encoding='utf-8') as f:
+                    self.synthesis_prompt_template = f.read()
+            else:
+                logger.warning("Synthesis prompt template not found, using default")
+                self.synthesis_prompt_template = self._get_default_synthesis_prompt()
+                
+        except Exception as e:
+            logger.error(f"Error loading prompt templates: {e}")
+            self.planning_prompt_template = self._get_default_planning_prompt()
+            self.synthesis_prompt_template = self._get_default_synthesis_prompt()
+    
+    def _get_default_planning_prompt(self) -> str:
+        """Default planning prompt if file is not available."""
+        return """You are a mathematical AI assistant. Create a step-by-step solution plan for the given problem.
+
+Problem: {original_problem}
+Domain: {domain}
+Type: {problem_type}
+Variables: {variables}
+Expression: {expression}
+
+Respond with a JSON plan containing steps with types 'explanation' or 'tool_call'.
+Available tools: 
+- SymPy MCP: solve_equation, simplify_expression, compute_derivative, compute_integral, matrix_operations, numerical_verification, to_latex
+- Linear Algebra Solver: compute_determinant, compute_inverse, lu_decomposition, qr_decomposition, eigen_decomposition, svd
+- Optimization Solver: gradient_descent, find_critical_points
+
+For linear algebra operations (determinant, inverse, LU, QR, SVD, eigenvalues), use the linear_algebra_solver tool.
+For optimization problems (minimize, maximize, gradient descent), use the optimization_solver tool.
+For symbolic math operations, use the sympy_mcp tool.
+
+Format:
+{
+  "plan": [
+    {"type": "explanation", "content": "explanation text"},
+    {"type": "tool_call", "tool": "linear_algebra_solver", "command": "compute_determinant", "args": {"matrix": [[1,2],[3,4]]}},
+    {"type": "tool_call", "tool": "optimization_solver", "command": "gradient_descent", "args": {"function_expr": "(x-10)**2", "variables": ["x"], "initial_point": [0.0]}},
+    {"type": "tool_call", "tool": "sympy_mcp", "command": "tool_name", "args": {"arg1": "value1"}}
+  ]
+}"""
+    
+    def _get_default_synthesis_prompt(self) -> str:
+        """Default synthesis prompt if file is not available."""
+        return """Create a comprehensive final answer in Markdown format with LaTeX notation.
+
+Original Problem: {original_problem}
+Execution Log: {execution_log}
+Results: {computation_results}
+Verification: {verification_summary}
+
+Provide a complete solution with:
+1. Problem restatement
+2. Solution approach
+3. Step-by-step solution with LaTeX
+4. Final answer (highlighted)
+5. Verification status (include verification details - this is a key differentiator!)
+
+IMPORTANT: Always include the verification status prominently in your answer. Use ✅ for verified solutions and ❌ for unverified ones. This builds user trust and demonstrates mathematical rigor."""
+    
+    def execute_solution_pipeline(self, problem_text: str, api_key: str) -> PipelineResult:
+        """
+        Execute the complete solution pipeline for a mathematical problem.
+        
+        This is the main entry point that orchestrates:
+        1. Problem parsing and analysis
+        2. Solution planning with OpenAI
+        3. Plan execution with tool calls
+        4. Final synthesis and formatting
+        
+        Args:
+            problem_text: The mathematical problem to solve
+            api_key: OpenAI API key
+            
+        Returns:
+            PipelineResult containing the complete solution or error information
+        """
+        start_time = time.time()
+        
+        try:
+            # Update OpenAI client if different API key provided
+            if api_key != self.openai_client.api_key:
+                self.openai_client = OpenAI(api_key=api_key)
+            
+            logger.info(f"Starting solution pipeline for: {problem_text[:100]}...")
+            
+            # Step A: Parse the problem
+            logger.info("Step A: Parsing problem...")
+            parsed_problem = self._parse_problem(problem_text)
+            if not parsed_problem:
+                return PipelineResult(
+                    success=False,
+                    error_message="Failed to parse the mathematical problem"
+                )
+            
+            # Step B: Create solution plan with OpenAI
+            logger.info("Step B: Creating solution plan...")
+            plan, openai_calls = self._create_solution_plan(parsed_problem)
+            if not plan:
+                return PipelineResult(
+                    success=False,
+                    error_message="Failed to create solution plan",
+                    parsed_problem=parsed_problem
+                )
+            
+            # Step C: Execute the plan
+            logger.info("Step C: Executing solution plan...")
+            execution_steps, sympy_calls = self._execute_plan(plan)
+            
+            # Step D: Verify the solution
+            logger.info("Step D: Verifying solution...")
+            verification_result = self._verify_solution(parsed_problem, execution_steps)
+            
+            # Step E: Generate visualization
+            logger.info("Step E: Generating visualization...")
+            plot_object = self._generate_visualization(parsed_problem, execution_steps)
+            
+            # Step F: Synthesize final answer
+            logger.info("Step F: Synthesizing final answer...")
+            final_answer, synthesis_calls = self._synthesize_final_answer(
+                parsed_problem, execution_steps, verification_result
+            )
+            
+            end_time = time.time()
+            total_time_ms = (end_time - start_time) * 1000
+            
+            # Update statistics
+            self.total_problems_solved += 1
+            self.total_execution_time += total_time_ms
+            
+            logger.info(f"Pipeline completed successfully in {total_time_ms:.2f}ms")
+            
+            return PipelineResult(
+                success=True,
+                final_answer=final_answer,
+                parsed_problem=parsed_problem,
+                execution_steps=execution_steps,
+                verification_result=verification_result,
+                plot_object=plot_object,
+                total_execution_time_ms=total_time_ms,
+                openai_calls=openai_calls + synthesis_calls,
+                sympy_calls=sympy_calls
+            )
+            
+        except Exception as e:
+            end_time = time.time()
+            total_time_ms = (end_time - start_time) * 1000
+            
+            logger.error(f"Pipeline failed: {str(e)}")
+            
+            return PipelineResult(
+                success=False,
+                error_message=f"Pipeline execution failed: {str(e)}",
+                total_execution_time_ms=total_time_ms
+            )
+    
+    def _parse_problem(self, problem_text: str) -> Optional[ParsedProblem]:
+        """
+        Parse the mathematical problem using the problem parser.
+        
+        Args:
+            problem_text: The problem text to parse
+            
+        Returns:
+            ParsedProblem object or None if parsing fails
+        """
+        try:
+            parsed = self.parser.parse(problem_text)
+            
+            logger.info(f"Problem parsed successfully:")
+            logger.info(f"  Domain: {parsed.domain}")
+            logger.info(f"  Type: {parsed.problem_type}")
+            logger.info(f"  Variables: {parsed.variables}")
+            logger.info(f"  Expression: {parsed.expression}")
+            logger.info(f"  Confidence: {parsed.confidence.overall:.2f}")
+            
+            return parsed
+            
+        except Exception as e:
+            logger.error(f"Problem parsing failed: {str(e)}")
+            return None
+    
+    def _create_solution_plan(self, parsed_problem: ParsedProblem) -> Tuple[Optional[List[Dict]], int]:
+        """
+        Create a solution plan using OpenAI GPT-4o.
+        
+        Args:
+            parsed_problem: The parsed problem object
+            
+        Returns:
+            Tuple of (plan_steps, openai_calls_made)
+        """
+        try:
+            # Prepare the prompt
+            prompt = self.planning_prompt_template.format(
+                original_problem=parsed_problem.original_text,
+                domain=parsed_problem.domain.value,
+                problem_type=parsed_problem.problem_type.value,
+                variables=', '.join(parsed_problem.variables) if parsed_problem.variables else 'None',
+                expression=parsed_problem.expression or 'None',
+                confidence=f"{parsed_problem.confidence.overall:.2f}"
+            )
+            
+            # Make OpenAI API call
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a specialized mathematical AI assistant. Always respond with valid JSON."
+                    },
+                    {
+                        "role": "user", 
+                        "content": prompt
+                    }
+                ],
+                temperature=0.1,
+                max_tokens=2000
+            )
+            
+            # Parse the JSON response
+            response_content = response.choices[0].message.content.strip()
+            
+            # Clean up the response if it's wrapped in markdown code blocks
+            if response_content.startswith('```json'):
+                response_content = response_content[7:]  # Remove ```json
+            if response_content.endswith('```'):
+                response_content = response_content[:-3]  # Remove ```
+            
+            plan_data = json.loads(response_content)
+            plan_steps = plan_data.get('plan', [])
+            
+            logger.info(f"Created solution plan with {len(plan_steps)} steps")
+            
+            return plan_steps, 1
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse OpenAI JSON response: {e}")
+            return None, 1
+        except Exception as e:
+            logger.error(f"Failed to create solution plan: {str(e)}")
+            return None, 1
+    
+    def _execute_plan(self, plan_steps: List[Dict]) -> Tuple[List[ExecutionStep], int]:
+        """
+        Execute the solution plan step by step.
+        
+        Args:
+            plan_steps: List of plan steps from OpenAI
+            
+        Returns:
+            Tuple of (execution_steps, sympy_calls_made)
+        """
+        execution_steps = []
+        sympy_calls = 0
+        
+        for i, step in enumerate(plan_steps):
+            step_start_time = time.time()
+            
+            step_type = step.get('type', 'unknown')
+            
+            if step_type == 'explanation':
+                # Handle explanation steps
+                execution_step = ExecutionStep(
+                    step_number=i + 1,
+                    step_type='explanation',
+                    content=step.get('content', ''),
+                    success=True
+                )
+                
+            elif step_type == 'tool_call':
+                # Handle tool call steps
+                execution_step = self._execute_tool_call(i + 1, step)
+                if execution_step.success:
+                    sympy_calls += 1
+                    
+            else:
+                # Handle unknown step types
+                execution_step = ExecutionStep(
+                    step_number=i + 1,
+                    step_type='error',
+                    success=False,
+                    error_message=f"Unknown step type: {step_type}"
+                )
+            
+            step_end_time = time.time()
+            execution_step.execution_time_ms = (step_end_time - step_start_time) * 1000
+            
+            execution_steps.append(execution_step)
+            
+            logger.info(f"Step {i+1} ({step_type}): {'Success' if execution_step.success else 'Failed'}")
+        
+        return execution_steps, sympy_calls
+    
+    def _execute_tool_call(self, step_number: int, step: Dict) -> ExecutionStep:
+        """
+        Execute a single tool call step.
+        
+        Args:
+            step_number: The step number
+            step: The step dictionary containing tool call information
+            
+        Returns:
+            ExecutionStep with the result of the tool call
+        """
+        try:
+            tool = step.get('tool', '')
+            command = step.get('command', '')
+            args = step.get('args', {})
+            description = step.get('description', '')
+            
+            # Handle different tool types
+            if tool == 'sympy_mcp':
+                return self._execute_sympy_tool_call(step_number, step)
+            elif tool == 'linear_algebra_solver':
+                return self._execute_linear_algebra_tool_call(step_number, step)
+            elif tool == 'stats_solver':
+                return self._execute_stats_solver_tool_call(step_number, step)
+            elif tool == 'optimization_solver':
+                return self._execute_optimization_solver_tool_call(step_number, step)
+            else:
+                return ExecutionStep(
+                    step_number=step_number,
+                    step_type='tool_call',
+                    tool=tool,
+                    command=command,
+                    args=args,
+                    success=False,
+                    error_message=f"Unknown tool: {tool}"
+                )
+            
+        except Exception as e:
+            logger.error(f"Tool call execution failed: {str(e)}")
+            return ExecutionStep(
+                step_number=step_number,
+                step_type='tool_call',
+                tool=step.get('tool', ''),
+                command=step.get('command', ''),
+                args=step.get('args', {}),
+                success=False,
+                error_message=str(e)
+            )
+    
+    def _execute_sympy_tool_call(self, step_number: int, step: Dict) -> ExecutionStep:
+        """
+        Execute a SymPy MCP tool call.
+        
+        Args:
+            step_number: The step number
+            step: The step dictionary containing tool call information
+            
+        Returns:
+            ExecutionStep with the result of the SymPy tool call
+        """
+        try:
+            command = step.get('command', '')
+            args = step.get('args', {})
+            description = step.get('description', '')
+            
+            # Map commands to SymPy client methods
+            command_mapping = {
+                'solve_equation': self.sympy_client.solve_equation,
+                'simplify_expression': self.sympy_client.simplify_expression,
+                'compute_derivative': self.sympy_client.compute_derivative,
+                'compute_integral': self.sympy_client.compute_integral,
+                'matrix_operations': self.sympy_client.matrix_operations,
+                'numerical_verification': self.sympy_client.numerical_verification,
+                'to_latex': self.sympy_client.to_latex
+            }
+            
+            if command not in command_mapping:
+                return ExecutionStep(
+                    step_number=step_number,
+                    step_type='tool_call',
+                    tool='sympy_mcp',
+                    command=command,
+                    args=args,
+                    success=False,
+                    error_message=f"Unknown SymPy command: {command}"
+                )
+            
+            # Execute the tool call
+            method = command_mapping[command]
+            
+            # Handle different argument patterns
+            if command in ['solve_equation', 'simplify_expression', 'to_latex']:
+                result = method(args.get('expression', ''))
+            elif command == 'compute_derivative':
+                result = method(
+                    args.get('expression', ''),
+                    args.get('variable', 'x')
+                )
+            elif command == 'compute_integral':
+                result = method(
+                    args.get('expression', ''),
+                    args.get('variable', 'x'),
+                    args.get('lower_limit'),
+                    args.get('upper_limit')
+                )
+            elif command == 'matrix_operations':
+                result = method(
+                    args.get('matrix_data', ''),
+                    args.get('operation', '')
+                )
+            elif command == 'numerical_verification':
+                result = method(
+                    args.get('original_expression', ''),
+                    args.get('symbolic_result', ''),
+                    args.get('num_tests', 10)
+                )
+            else:
+                result = method(**args)
+            
+            # Create execution step
+            return ExecutionStep(
+                step_number=step_number,
+                step_type='tool_call',
+                content=description,
+                tool='sympy_mcp',
+                command=command,
+                args=args,
+                result=result,
+                success=result.get('status') == 'success' if isinstance(result, dict) else True
+            )
+            
+        except Exception as e:
+            logger.error(f"SymPy tool call execution failed: {str(e)}")
+            return ExecutionStep(
+                step_number=step_number,
+                step_type='tool_call',
+                tool='sympy_mcp',
+                command=step.get('command', ''),
+                args=step.get('args', {}),
+                success=False,
+                error_message=str(e)
+            )
+    
+    def _execute_linear_algebra_tool_call(self, step_number: int, step: Dict) -> ExecutionStep:
+        """
+        Execute a linear algebra solver tool call.
+        
+        Args:
+            step_number: The step number
+            step: The step dictionary containing tool call information
+            
+        Returns:
+            ExecutionStep with the result of the linear algebra tool call
+        """
+        try:
+            command = step.get('command', '')
+            args = step.get('args', {})
+            description = step.get('description', '')
+            
+            # Map commands to linear algebra solver methods
+            command_mapping = {
+                'compute_determinant': self.linear_algebra_solver.compute_determinant,
+                'compute_inverse': self.linear_algebra_solver.compute_inverse,
+                'lu_decomposition': self.linear_algebra_solver.lu_decomposition,
+                'qr_decomposition': self.linear_algebra_solver.qr_decomposition,
+                'eigen_decomposition': self.linear_algebra_solver.eigen_decomposition,
+                'svd': self.linear_algebra_solver.svd
+            }
+            
+            if command not in command_mapping:
+                return ExecutionStep(
+                    step_number=step_number,
+                    step_type='tool_call',
+                    tool='linear_algebra_solver',
+                    command=command,
+                    args=args,
+                    success=False,
+                    error_message=f"Unknown linear algebra command: {command}"
+                )
+            
+            # Execute the tool call
+            method = command_mapping[command]
+            
+            # All linear algebra methods take a matrix as the first argument
+            matrix = args.get('matrix', [])
+            result = method(matrix)
+            
+            # Create execution step
+            return ExecutionStep(
+                step_number=step_number,
+                step_type='tool_call',
+                content=description,
+                tool='linear_algebra_solver',
+                command=command,
+                args=args,
+                result=result,
+                success=result.get('success', False)
+            )
+            
+        except Exception as e:
+            logger.error(f"Linear algebra tool call execution failed: {str(e)}")
+            return ExecutionStep(
+                step_number=step_number,
+                step_type='tool_call',
+                tool='linear_algebra_solver',
+                command=step.get('command', ''),
+                args=step.get('args', {}),
+                success=False,
+                error_message=str(e)
+            )
+    
+    def _execute_stats_solver_tool_call(self, step_number: int, step: Dict) -> ExecutionStep:
+        """
+        Execute a statistics solver tool call.
+        
+        Args:
+            step_number: The step number
+            step: The step dictionary containing tool call information
+            
+        Returns:
+            ExecutionStep with the result of the statistics tool call
+        """
+        try:
+            command = step.get('command', '')
+            args = step.get('args', {})
+            description = step.get('description', '')
+            
+            # Map commands to statistics solver functions
+            command_mapping = {
+                'calculate_descriptive_stats': calculate_descriptive_stats,
+                'get_distribution_details': get_distribution_details,
+                'perform_t_test': perform_t_test,
+                'generate_random_variates': generate_random_variates,
+                'perform_normality_test': perform_normality_test,
+                'calculate_correlation': calculate_correlation
+            }
+            
+            if command not in command_mapping:
+                return ExecutionStep(
+                    step_number=step_number,
+                    step_type='tool_call',
+                    tool='stats_solver',
+                    command=command,
+                    args=args,
+                    success=False,
+                    error_message=f"Unknown statistics command: {command}"
+                )
+            
+            # Execute the tool call with appropriate arguments
+            method = command_mapping[command]
+            
+            try:
+                if command == 'calculate_descriptive_stats':
+                    data = args.get('data', [])
+                    result = method(data)
+                
+                elif command == 'get_distribution_details':
+                    dist_name = args.get('distribution', '')
+                    params = args.get('parameters', {})
+                    points = args.get('points', [])
+                    result = method(dist_name, params, points)
+                
+                elif command == 'perform_t_test':
+                    sample_a = args.get('sample_a', [])
+                    sample_b = args.get('sample_b', [])
+                    equal_var = args.get('equal_var', True)
+                    result = method(sample_a, sample_b, equal_var)
+                
+                elif command == 'generate_random_variates':
+                    dist_name = args.get('distribution', '')
+                    params = args.get('parameters', {})
+                    size = args.get('size', 100)
+                    result = method(dist_name, params, size)
+                
+                elif command == 'perform_normality_test':
+                    data = args.get('data', [])
+                    test_type = args.get('test_type', 'shapiro')
+                    result = method(data, test_type)
+                
+                elif command == 'calculate_correlation':
+                    x_data = args.get('x_data', [])
+                    y_data = args.get('y_data', [])
+                    method_type = args.get('method', 'pearson')
+                    result = method(x_data, y_data, method_type)
+                
+                else:
+                    # Fallback: try to call with all args
+                    result = method(**args)
+                
+            except Exception as e:
+                result = {
+                    'success': False,
+                    'error': f"Statistics calculation failed: {str(e)}",
+                    'error_type': type(e).__name__
+                }
+            
+            # Create execution step
+            return ExecutionStep(
+                step_number=step_number,
+                step_type='tool_call',
+                content=description,
+                tool='stats_solver',
+                command=command,
+                args=args,
+                result=result,
+                success=result.get('success', False)
+            )
+            
+        except Exception as e:
+            logger.error(f"Statistics tool call execution failed: {str(e)}")
+            return ExecutionStep(
+                step_number=step_number,
+                step_type='tool_call',
+                tool='stats_solver',
+                command=step.get('command', ''),
+                args=step.get('args', {}),
+                success=False,
+                error_message=str(e)
+            )
+    
+    def _execute_optimization_solver_tool_call(self, step_number: int, step: Dict) -> ExecutionStep:
+        """
+        Execute an optimization solver tool call.
+        
+        Args:
+            step_number: The step number
+            step: The step dictionary containing tool call information
+            
+        Returns:
+            ExecutionStep with the result of the optimization tool call
+        """
+        try:
+            command = step.get('command', '')
+            args = step.get('args', {})
+            description = step.get('description', '')
+            
+            # Handle different optimization commands
+            if command == 'gradient_descent':
+                function_expr = args.get('function_expr', '')
+                variables = args.get('variables', [])
+                initial_point = args.get('initial_point', [])
+                learning_rate = args.get('learning_rate', 0.1)
+                max_iterations = args.get('max_iterations', 1000)
+                tolerance = args.get('tolerance', 1e-6)
+                adaptive_lr = args.get('adaptive_lr', False)
+                momentum = args.get('momentum', 0.0)
+                record_history = args.get('record_history', True)
+                
+                result = self.optimization_solver.gradient_descent(
+                    function_expr=function_expr,
+                    variables=variables,
+                    initial_point=initial_point,
+                    learning_rate=learning_rate,
+                    max_iterations=max_iterations,
+                    tolerance=tolerance,
+                    adaptive_lr=adaptive_lr,
+                    momentum=momentum,
+                    record_history=record_history
+                )
+                
+                # Convert OptimizationResult to dict for consistency
+                result_dict = result.to_dict()
+                
+            elif command == 'find_critical_points':
+                function_expr = args.get('function_expr', '')
+                variables = args.get('variables', [])
+                search_region = args.get('search_region', None)
+                num_starting_points = args.get('num_starting_points', 10)
+                
+                result_dict = self.optimization_solver.find_critical_points(
+                    function_expr=function_expr,
+                    variables=variables,
+                    search_region=search_region,
+                    num_starting_points=num_starting_points
+                )
+                
+            else:
+                return ExecutionStep(
+                    step_number=step_number,
+                    step_type='tool_call',
+                    tool='optimization_solver',
+                    command=command,
+                    args=args,
+                    success=False,
+                    error_message=f"Unknown optimization command: {command}"
+                )
+            
+            # Create execution step
+            return ExecutionStep(
+                step_number=step_number,
+                step_type='tool_call',
+                content=description,
+                tool='optimization_solver',
+                command=command,
+                args=args,
+                result=result_dict,
+                success=result_dict.get('success', False)
+            )
+            
+        except Exception as e:
+            logger.error(f"Optimization tool call execution failed: {str(e)}")
+            return ExecutionStep(
+                step_number=step_number,
+                step_type='tool_call',
+                tool='optimization_solver',
+                command=step.get('command', ''),
+                args=step.get('args', {}),
+                success=False,
+                error_message=str(e)
+            )
+    
+    def _verify_solution(self, parsed_problem: ParsedProblem, 
+                        execution_steps: List[ExecutionStep]) -> VerificationResult:
+        """
+        Verify the solution using the multi-layer verification system.
+        
+        Args:
+            parsed_problem: The original parsed problem
+            execution_steps: List of executed steps containing solutions
+            
+        Returns:
+            VerificationResult containing verification status and details
+        """
+        try:
+            # Extract the main solution from successful execution steps
+            main_solution = {}
+            
+            for step in execution_steps:
+                if step.success and step.result:
+                    # Merge results from all successful steps
+                    main_solution.update(step.result)
+            
+            # Add original matrix information if available
+            if parsed_problem.expression and '[' in parsed_problem.expression:
+                try:
+                    # Try to extract matrix from expression
+                    import re
+                    matrix_match = re.search(r'\[\[.*?\]\]', parsed_problem.expression)
+                    if matrix_match:
+                        matrix_str = matrix_match.group()
+                        # Convert string representation to actual matrix
+                        matrix = eval(matrix_str)  # Note: In production, use safer parsing
+                        main_solution['original_matrix'] = matrix
+                except:
+                    pass  # Ignore parsing errors
+            
+            # Verify the solution
+            verification_result = self.verifier.verify_solution(parsed_problem, main_solution)
+            
+            logger.info(f"Solution verification: {verification_result.is_verified} "
+                       f"(confidence: {verification_result.confidence:.3f})")
+            
+            return verification_result
+            
+        except Exception as e:
+            logger.error(f"Solution verification failed: {str(e)}")
+            return VerificationResult(
+                is_verified=False,
+                confidence=0.0,
+                method=VerificationMethod.UNKNOWN,
+                details=f"Verification failed: {str(e)}",
+                execution_time_ms=0.0,
+                warnings=[f"Verification error: {str(e)}"]
+            )
+    
+    def _generate_visualization(self, parsed_problem: ParsedProblem, 
+                               execution_steps: List[ExecutionStep]) -> Optional[Any]:
+        """
+        Generate visualization for the mathematical problem and solution.
+        
+        Args:
+            parsed_problem: The original parsed problem
+            execution_steps: List of executed steps containing solutions
+            
+        Returns:
+            Plot object (Plotly Figure or Matplotlib Figure) or None if no visualization needed
+        """
+        try:
+            logger.info(f"Determining visualization for {parsed_problem.problem_type.value} problem")
+            
+            # Check if visualization is appropriate for this problem type
+            if not self._should_visualize(parsed_problem):
+                logger.info("No visualization needed for this problem type")
+                return None
+            
+            # Extract solution data from execution steps
+            solution_data = {}
+            for step in execution_steps:
+                if step.success and step.result:
+                    solution_data.update(step.result)
+            
+            # Generate visualization based on problem type and domain
+            if parsed_problem.domain == MathDomain.LINEAR_ALGEBRA:
+                return self._create_linear_algebra_visualization(parsed_problem, solution_data)
+            
+            elif parsed_problem.domain == MathDomain.CALCULUS:
+                return self._create_function_visualization(parsed_problem, solution_data)
+            
+            elif parsed_problem.domain == MathDomain.ALGEBRA:
+                return self._create_algebraic_visualization(parsed_problem, solution_data)
+            
+            elif parsed_problem.domain == MathDomain.OPTIMIZATION:
+                return self._create_optimization_visualization(parsed_problem, solution_data)
+            
+            else:
+                # Try to detect if we can create a function plot
+                if parsed_problem.expression and any(var in parsed_problem.expression for var in ['x', 'y', 't']):
+                    return self._create_function_visualization(parsed_problem, solution_data)
+            
+            logger.info("No suitable visualization method found")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Visualization generation failed: {str(e)}")
+            return None
+    
+    def _should_visualize(self, parsed_problem: ParsedProblem) -> bool:
+        """Determine if the problem should be visualized."""
+        # Always visualize linear algebra problems with matrices
+        if parsed_problem.domain == MathDomain.LINEAR_ALGEBRA:
+            if parsed_problem.problem_type in [
+                ProblemType.DETERMINANT, ProblemType.INVERSE, 
+                ProblemType.LU_DECOMPOSITION, ProblemType.QR_DECOMPOSITION,
+                ProblemType.SVD, ProblemType.EIGEN_DECOMPOSITION
+            ]:
+                return True
+        
+        # Visualize functions and calculus problems
+        if parsed_problem.domain == MathDomain.CALCULUS:
+            return True
+        
+        # Visualize optimization problems
+        if parsed_problem.domain == MathDomain.OPTIMIZATION:
+            return True
+        
+        # Visualize algebraic functions
+        if parsed_problem.expression and any(var in parsed_problem.expression for var in ['x', 'y', 't']):
+            return True
+        
+        # Check for explicit plotting requests
+        plot_keywords = ['plot', 'graph', 'visualize', 'draw', 'show']
+        if any(keyword in parsed_problem.original_text.lower() for keyword in plot_keywords):
+            return True
+        
+        return False
+    
+    def _create_linear_algebra_visualization(self, parsed_problem: ParsedProblem, 
+                                           solution_data: Dict[str, Any]) -> Optional[Any]:
+        """Create visualization for linear algebra problems."""
+        try:
+            # Matrix heatmap for determinant/inverse problems
+            if parsed_problem.problem_type in [ProblemType.DETERMINANT, ProblemType.INVERSE]:
+                if 'original_matrix' in solution_data:
+                    matrix = solution_data['original_matrix']
+                    title = f"Matrix for {parsed_problem.problem_type.value.replace('_', ' ').title()}"
+                    return self.visualizer.plot_matrix_heatmap(matrix, title=title)
+                elif parsed_problem.expression and '[' in parsed_problem.expression:
+                    # Try to extract matrix from expression
+                    import re
+                    matrix_match = re.search(r'\[\[.*?\]\]', parsed_problem.expression)
+                    if matrix_match:
+                        try:
+                            matrix = eval(matrix_match.group())
+                            title = f"Matrix for {parsed_problem.problem_type.value.replace('_', ' ').title()}"
+                            return self.visualizer.plot_matrix_heatmap(matrix, title=title)
+                        except:
+                            pass
+            
+            # Matrix decomposition visualization
+            elif parsed_problem.problem_type in [ProblemType.LU_DECOMPOSITION, ProblemType.QR_DECOMPOSITION, ProblemType.SVD]:
+                decomposition_matrices = {}
+                
+                if parsed_problem.problem_type == ProblemType.LU_DECOMPOSITION:
+                    for key in ['P', 'L', 'U']:
+                        if key in solution_data:
+                            decomposition_matrices[key] = solution_data[key]
+                    if decomposition_matrices:
+                        return self.visualizer.plot_matrix_decomposition(
+                            decomposition_matrices, "LU"
+                        )
+                
+                elif parsed_problem.problem_type == ProblemType.QR_DECOMPOSITION:
+                    for key in ['Q', 'R']:
+                        if key in solution_data:
+                            decomposition_matrices[key] = solution_data[key]
+                    if decomposition_matrices:
+                        return self.visualizer.plot_matrix_decomposition(
+                            decomposition_matrices, "QR"
+                        )
+                
+                elif parsed_problem.problem_type == ProblemType.SVD:
+                    for key in ['U', 'Vh']:
+                        if key in solution_data:
+                            decomposition_matrices[key] = solution_data[key]
+                    if decomposition_matrices:
+                        return self.visualizer.plot_matrix_decomposition(
+                            decomposition_matrices, "SVD"
+                        )
+            
+            # Eigenvalue visualization
+            elif parsed_problem.problem_type == ProblemType.EIGEN_DECOMPOSITION:
+                if 'eigenvalues_real' in solution_data:
+                    eigenvals_real = solution_data['eigenvalues_real']
+                    eigenvals_imag = solution_data.get('eigenvalues_imag', [0]*len(eigenvals_real))
+                    
+                    # Convert to complex numbers
+                    eigenvals = [complex(r, i) for r, i in zip(eigenvals_real, eigenvals_imag)]
+                    return self.visualizer.plot_eigenvalues(eigenvals)
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Linear algebra visualization failed: {e}")
+            return None
+    
+    def _create_function_visualization(self, parsed_problem: ParsedProblem, 
+                                     solution_data: Dict[str, Any]) -> Optional[Any]:
+        """Create visualization for function-based problems."""
+        try:
+            expression = parsed_problem.expression
+            if not expression:
+                return None
+            
+            # Determine variable
+            variables = parsed_problem.variables
+            if variables:
+                variable = variables[0]
+            elif 'x' in expression:
+                variable = 'x'
+            elif 't' in expression:
+                variable = 't'
+            else:
+                variable = 'x'  # Default
+            
+            # Create appropriate title
+            if parsed_problem.problem_type == ProblemType.DIFFERENTIATE:
+                title = f"Original Function: f({variable}) = {expression}"
+            elif parsed_problem.problem_type == ProblemType.INTEGRATE:
+                title = f"Integrand: f({variable}) = {expression}"
+            else:
+                title = f"Function: f({variable}) = {expression}"
+            
+            return self.visualizer.plot_function_2d(
+                expression, variable=variable, title=title
+            )
+            
+        except Exception as e:
+            logger.error(f"Function visualization failed: {e}")
+            return None
+    
+    def _create_algebraic_visualization(self, parsed_problem: ParsedProblem, 
+                                      solution_data: Dict[str, Any]) -> Optional[Any]:
+        """Create visualization for algebraic problems."""
+        try:
+            # Only visualize if there's a meaningful expression with variables
+            expression = parsed_problem.expression
+            if not expression or not parsed_problem.variables:
+                return None
+            
+            # For polynomial or rational expressions, create a plot
+            return self.visualizer.plot_function_2d(
+                expression, 
+                variable=parsed_problem.variables[0] if parsed_problem.variables else 'x',
+                title=f"Expression: {expression}"
+            )
+            
+        except Exception as e:
+            logger.error(f"Algebraic visualization failed: {e}")
+            return None
+    
+    def _create_optimization_visualization(self, parsed_problem: ParsedProblem, 
+                                         solution_data: Dict[str, Any]) -> Optional[Any]:
+        """Create visualization for optimization problems."""
+        try:
+            # Check if we have convergence history for gradient descent visualization
+            if 'convergence_history' in solution_data and solution_data['convergence_history']:
+                history = solution_data['convergence_history']
+                
+                # Extract optimization path data
+                iterations = [entry['iteration'] for entry in history]
+                function_values = [entry['function_value'] for entry in history]
+                
+                # For 1D problems, show the optimization path on the function
+                if len(parsed_problem.variables) == 1 and parsed_problem.expression:
+                    points = [entry['point'][0] for entry in history]
+                    return self.visualizer.plot_optimization_path_1d(
+                        parsed_problem.expression,
+                        parsed_problem.variables[0],
+                        points,
+                        function_values,
+                        title=f"Gradient Descent: {parsed_problem.expression}"
+                    )
+                
+                # For 2D problems, show contour plot with path
+                elif len(parsed_problem.variables) == 2 and parsed_problem.expression:
+                    x_path = [entry['point'][0] for entry in history]
+                    y_path = [entry['point'][1] for entry in history]
+                    return self.visualizer.plot_optimization_path_2d(
+                        parsed_problem.expression,
+                        parsed_problem.variables,
+                        x_path,
+                        y_path,
+                        function_values,
+                        title=f"Gradient Descent: {parsed_problem.expression}"
+                    )
+                
+                # Fallback: show convergence curve
+                else:
+                    return self.visualizer.plot_convergence_curve(
+                        iterations,
+                        function_values,
+                        title="Optimization Convergence"
+                    )
+            
+            # If no convergence history, try to plot the function being optimized
+            elif parsed_problem.expression:
+                if len(parsed_problem.variables) == 1:
+                    return self.visualizer.plot_function_2d(
+                        parsed_problem.expression,
+                        variable=parsed_problem.variables[0],
+                        title=f"Objective Function: {parsed_problem.expression}"
+                    )
+                elif len(parsed_problem.variables) == 2:
+                    return self.visualizer.plot_function_3d(
+                        parsed_problem.expression,
+                        variables=parsed_problem.variables,
+                        title=f"Objective Function: {parsed_problem.expression}"
+                    )
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Optimization visualization failed: {e}")
+            return None
+    
+    def _synthesize_final_answer(self, parsed_problem: ParsedProblem, 
+                               execution_steps: List[ExecutionStep],
+                               verification_result: VerificationResult) -> Tuple[str, int]:
+        """
+        Synthesize the final answer using OpenAI.
+        
+        Args:
+            parsed_problem: The original parsed problem
+            execution_steps: List of executed steps
+            verification_result: Result of solution verification
+            
+        Returns:
+            Tuple of (final_answer, openai_calls_made)
+        """
+        try:
+            # Prepare execution log
+            execution_log = []
+            computation_results = []
+            
+            for step in execution_steps:
+                if step.step_type == 'explanation':
+                    execution_log.append(f"Step {step.step_number}: {step.content}")
+                elif step.step_type == 'tool_call':
+                    if step.success and step.result:
+                        execution_log.append(
+                            f"Step {step.step_number}: {step.content or step.command} -> Success"
+                        )
+                        computation_results.append({
+                            'step': step.step_number,
+                            'command': step.command,
+                            'result': step.result
+                        })
+                    else:
+                        execution_log.append(
+                            f"Step {step.step_number}: {step.command} -> Failed: {step.error_message}"
+                        )
+            
+            # Prepare verification summary
+            verification_summary = f"Verification Status: {'✅ VERIFIED' if verification_result.is_verified else '❌ NOT VERIFIED'}\n"
+            verification_summary += f"Confidence: {verification_result.confidence:.1%}\n"
+            verification_summary += f"Method: {verification_result.method.value.replace('_', ' ').title()}\n"
+            verification_summary += f"Details: {verification_result.details}"
+            
+            if verification_result.warnings:
+                verification_summary += f"\nWarnings: {'; '.join(verification_result.warnings)}"
+            
+            # Prepare the synthesis prompt
+            prompt = self.synthesis_prompt_template.format(
+                original_problem=parsed_problem.original_text,
+                execution_log='\n'.join(execution_log),
+                computation_results=json.dumps(computation_results, indent=2),
+                verification_summary=verification_summary
+            )
+            
+            # Make OpenAI API call for synthesis
+            response = self.openai_client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a mathematical expert who creates comprehensive, well-formatted solutions using Markdown and LaTeX."
+                    },
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                temperature=0.2,
+                max_tokens=3000
+            )
+            
+            final_answer = response.choices[0].message.content.strip()
+            
+            logger.info("Final answer synthesized successfully")
+            
+            return final_answer, 1
+            
+        except Exception as e:
+            logger.error(f"Final answer synthesis failed: {str(e)}")
+            
+            # Fallback: create a basic summary
+            fallback_answer = self._create_fallback_answer(parsed_problem, execution_steps, verification_result)
+            return fallback_answer, 1
+    
+    def _create_fallback_answer(self, parsed_problem: ParsedProblem, 
+                              execution_steps: List[ExecutionStep],
+                              verification_result: VerificationResult) -> str:
+        """
+        Create a fallback answer when synthesis fails.
+        
+        Args:
+            parsed_problem: The original parsed problem
+            execution_steps: List of executed steps
+            verification_result: Result of solution verification
+            
+        Returns:
+            Basic formatted answer
+        """
+        answer_parts = [
+            "## Problem Statement",
+            f"{parsed_problem.original_text}",
+            "",
+            "## Solution Process",
+            ""
+        ]
+        
+        for step in execution_steps:
+            if step.success:
+                if step.step_type == 'explanation':
+                    answer_parts.append(f"**Step {step.step_number}:** {step.content}")
+                elif step.step_type == 'tool_call' and step.result:
+                    result = step.result
+                    if isinstance(result, dict) and 'result_latex' in result:
+                        answer_parts.append(f"**Step {step.step_number}:** ${result['result_latex']}$")
+                    elif isinstance(result, dict) and 'result_sympy' in result:
+                        answer_parts.append(f"**Step {step.step_number}:** `{result['result_sympy']}`")
+        
+        # Add verification information
+        answer_parts.extend([
+            "",
+            "## Verification",
+            f"**Status:** {'✅ Verified' if verification_result.is_verified else '❌ Not Verified'}",
+            f"**Confidence:** {verification_result.confidence:.1%}",
+            f"**Method:** {verification_result.method.value.replace('_', ' ').title()}",
+            f"**Details:** {verification_result.details}",
+            "",
+            "## Note",
+            "*Solution synthesis encountered an issue, but the computational steps above were completed successfully.*"
+        ])
+        
+        return "\n".join(answer_parts)
+    
+    def get_statistics(self) -> Dict[str, Any]:
+        """Get engine performance statistics."""
+        avg_time = (self.total_execution_time / self.total_problems_solved 
+                   if self.total_problems_solved > 0 else 0)
+        
+        return {
+            'problems_solved': self.total_problems_solved,
+            'total_execution_time_ms': self.total_execution_time,
+            'average_execution_time_ms': avg_time
+        }
+
+
+# Convenience function for direct usage
+def execute_solution_pipeline(problem_text: str, api_key: str) -> PipelineResult:
+    """
+    Execute the complete solution pipeline for a mathematical problem.
+    
+    This is the main entry point for the math-ai-agent system.
+    
+    Args:
+        problem_text: The mathematical problem to solve
+        api_key: OpenAI API key
+        
+    Returns:
+        PipelineResult containing the complete solution or error information
+    """
+    try:
+        engine = MathAIEngine(api_key)
+        return engine.execute_solution_pipeline(problem_text, api_key)
+    except Exception as e:
+        logger.error(f"Failed to execute solution pipeline: {str(e)}")
+        return PipelineResult(
+            success=False,
+            error_message=f"Engine initialization or execution failed: {str(e)}"
+        )

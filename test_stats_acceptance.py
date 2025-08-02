@@ -1,1 +1,270 @@
-#!/usr/bin/env python3 """ Acceptance Criteria Test for Statistics Solver Integration This script tests all acceptance criteria from SOLVER-003 task specification to ensure the statistics solver is properly integrated into the math-ai-agent. """ import sys import os import json # Add the src directory to path sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src')) def test_acceptance_criteria(): """Test all acceptance criteria from SOLVER-003.""" print("Testing Statistics Solver Integration Acceptance Criteria") print("=" * 65) criteria_passed = 0 total_criteria = 4 # Test 1: Descriptive statistics calculation print("[ ] Criterion 1: Calculate mean, median, and variance of [1, 2, 3, 4, 5]") try: from solvers.stats_solver import calculate_descriptive_stats result = calculate_descriptive_stats([1, 2, 3, 4, 5]) if result.get('success') and result.get('mean') == 3.0 and result.get('median') == 3.0 and result.get('variance') == 2.5: print(" Descriptive stats calculation works correctly") print(f" Mean: {result.get('mean')} (expected: 3.0)") print(f" Median: {result.get('median')} (expected: 3.0)") print(f" Variance: {result.get('variance')} (expected: 2.5)") criteria_passed += 1 else: print(" Descriptive stats calculation failed") print(f" Result: {result}") except ImportError as e: print(f" Cannot import stats solver: {e}") except Exception as e: print(f" Error in descriptive stats test: {e}") print() # Test 2: T-test functionality print("[ ] Criterion 2: T-test between [1,2,3] and [4,5,6] returns valid results") try: from solvers.stats_solver import perform_t_test result = perform_t_test([1, 2, 3], [4, 5, 6]) if (result.get('success') and 't_statistic' in result and 'p_value' in result and isinstance(result.get('t_statistic'), float) and isinstance(result.get('p_value'), float)): print(" T-test returns valid t-statistic and p-value") print(f" T-statistic: {result.get('t_statistic'):.4f}") print(f" P-value: {result.get('p_value'):.6f}") criteria_passed += 1 else: print(" T-test failed to return valid results") print(f" Result: {result}") except Exception as e: print(f" Error in t-test: {e}") print() # Test 3: Parser domain routing print("[ ] Criterion 3: Parser correctly routes statistics problems") try: from core.parser import get_parser parser = get_parser() # Test statistical problem parsing stat_problems = [ "calculate the mean, median, and variance of [1, 2, 3, 4, 5]", "perform a t-test between [1,2,3] and [4,5,6]", "find the p-value for comparing two samples", "generate random numbers from normal distribution", "calculate correlation between two variables" ] all_parsed_correctly = True for problem in stat_problems: parsed = parser.parse(problem) if parsed.domain.value != 'statistics': print(f" Failed to identify '{problem[:40]}...' as statistics") all_parsed_correctly = False break if all_parsed_correctly: print(" Parser correctly identifies statistical problems") criteria_passed += 1 except Exception as e: print(f" Error in parser test: {e}") print() # Test 4: Error handling for insufficient data print("[ ] Criterion 4: Structured error for t-test on [1] and [2]") try: from solvers.stats_solver import perform_t_test result = perform_t_test([1], [2]) if (not result.get('success') and 'error' in result and 'error_type' in result and result.get('error_type') == 'StatisticsError'): print(" Proper error handling for insufficient data") print(f" Error: {result.get('error')}") criteria_passed += 1 else: print(" Error handling failed") print(f" Result: {result}") except Exception as e: print(f" Error in error handling test: {e}") print() # Additional integration tests print("Additional Integration Tests:") print("-" * 30) # Test engine integration (if available) try: print("[ ] Testing engine integration...") # Test that the engine can handle a statistics problem # Note: This would require the full engine pipeline to be working print(" Engine integration test skipped (requires full pipeline)") except Exception as e: print(f" Engine integration test error: {e}") # Test all statistical functions are available print("[ ] Testing all statistical functions are available...") required_functions = [ 'calculate_descriptive_stats', 'get_distribution_details', 'perform_t_test', 'generate_random_variates', 'perform_normality_test', 'calculate_correlation' ] try: from solvers import stats_solver all_functions_available = True for func_name in required_functions: if not hasattr(stats_solver, func_name): print(f" Missing function: {func_name}") all_functions_available = False if all_functions_available: print(" All required statistical functions are available") except Exception as e: print(f" Error checking functions: {e}") print() print("=" * 65) print(f"Acceptance Criteria Results: {criteria_passed}/{total_criteria} passed") if criteria_passed == total_criteria: print(" ALL ACCEPTANCE CRITERIA PASSED!") print("\nThe statistics solver is successfully integrated into the MathBoardAI Agent.") print("\nFeatures available:") print("- Descriptive statistics (mean, median, variance, etc.)") print("- Hypothesis testing (t-tests)") print("- Probability distributions (PDF, CDF, random generation)") print("- Correlation analysis") print("- Normality testing") print("- Comprehensive error handling") print("- Parser integration for statistical terminology") print("\nUsage examples:") print('- "Calculate the mean and variance of [1, 2, 3, 4, 5]"') print('- "Perform a t-test between group A and group B"') print('- "Generate 100 random numbers from normal distribution"') print('- "Find the correlation between these two variables"') return True else: print(" Some acceptance criteria not met.") print("\nPlease check the implementation and resolve any issues.") return False def test_parser_statistical_recognition(): """Test parser's ability to recognize various statistical problems.""" print("\nTesting Parser Statistical Problem Recognition") print("-" * 50) try: from core.parser import get_parser from core.models import MathDomain, ProblemType parser = get_parser() test_cases = [ ("calculate the mean of [1, 2, 3, 4, 5]", MathDomain.STATISTICS, ProblemType.DESCRIPTIVE_STATISTICS), ("perform a t-test between two samples", MathDomain.STATISTICS, ProblemType.T_TEST), ("find the correlation between x and y", MathDomain.STATISTICS, ProblemType.CORRELATION_ANALYSIS), ("generate random numbers from normal distribution", MathDomain.STATISTICS, ProblemType.RANDOM_GENERATION), ("test if data is normally distributed", MathDomain.STATISTICS, ProblemType.NORMALITY_TEST), ("find the PDF of normal distribution at x=1", MathDomain.STATISTICS, ProblemType.DISTRIBUTION_ANALYSIS), ("what is the p-value for this hypothesis test", MathDomain.STATISTICS, ProblemType.HYPOTHESIS_TEST) ] passed = 0 for problem_text, expected_domain, expected_type in test_cases: parsed = parser.parse(problem_text) domain_correct = parsed.domain == expected_domain type_correct = parsed.problem_type == expected_type if domain_correct and type_correct: print(f" '{problem_text[:40]}...' -> {expected_domain.value}, {expected_type.value}") passed += 1 else: print(f" '{problem_text[:40]}...' -> {parsed.domain.value}, {parsed.problem_type.value}") print(f" Expected: {expected_domain.value}, {expected_type.value}") print(f"\nParser Recognition: {passed}/{len(test_cases)} passed") return passed == len(test_cases) except Exception as e: print(f"Error in parser test: {e}") return False def main(): """Run all acceptance tests.""" print("Statistics Solver (SOLVER-003) Acceptance Tests") print("=" * 60) # Run main acceptance criteria tests main_criteria_passed = test_acceptance_criteria() # Run parser recognition tests parser_tests_passed = test_parser_statistical_recognition() print("\n" + "=" * 60) print("FINAL RESULTS:") print(f"Main Acceptance Criteria: {'PASSED' if main_criteria_passed else 'FAILED'}") print(f"Parser Recognition Tests: {'PASSED' if parser_tests_passed else 'FAILED'}") if main_criteria_passed and parser_tests_passed: print("\n STATISTICS SOLVER IMPLEMENTATION COMPLETE!") print("The MathBoardAI Agent now supports comprehensive statistical analysis.") return 0 else: print("\n Some tests failed. Please review the implementation.") return 1 if __name__ == "__main__": sys.exit(main())
+#!/usr/bin/env python3
+"""
+Acceptance Criteria Test for Statistics Solver Integration
+
+This script tests all acceptance criteria from SOLVER-003 task specification
+to ensure the statistics solver is properly integrated into the math-ai-agent.
+"""
+
+import sys
+import os
+import json
+
+# Add the src directory to path
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+
+def test_acceptance_criteria():
+    """Test all acceptance criteria from SOLVER-003."""
+    print("Testing Statistics Solver Integration Acceptance Criteria")
+    print("=" * 65)
+    
+    criteria_passed = 0
+    total_criteria = 4
+    
+    # Test 1: Descriptive statistics calculation
+    print("[ ] Criterion 1: Calculate mean, median, and variance of [1, 2, 3, 4, 5]")
+    
+    try:
+        from solvers.stats_solver import calculate_descriptive_stats
+        
+        result = calculate_descriptive_stats([1, 2, 3, 4, 5])
+        
+        if result.get('success') and result.get('mean') == 3.0 and result.get('median') == 3.0 and result.get('variance') == 2.5:
+            print("  ✓ Descriptive stats calculation works correctly")
+            print(f"    Mean: {result.get('mean')} (expected: 3.0)")
+            print(f"    Median: {result.get('median')} (expected: 3.0)")
+            print(f"    Variance: {result.get('variance')} (expected: 2.5)")
+            criteria_passed += 1
+        else:
+            print("  ✗ Descriptive stats calculation failed")
+            print(f"    Result: {result}")
+            
+    except ImportError as e:
+        print(f"  ✗ Cannot import stats solver: {e}")
+    except Exception as e:
+        print(f"  ✗ Error in descriptive stats test: {e}")
+    
+    print()
+    
+    # Test 2: T-test functionality
+    print("[ ] Criterion 2: T-test between [1,2,3] and [4,5,6] returns valid results")
+    
+    try:
+        from solvers.stats_solver import perform_t_test
+        
+        result = perform_t_test([1, 2, 3], [4, 5, 6])
+        
+        if (result.get('success') and 
+            't_statistic' in result and 
+            'p_value' in result and 
+            isinstance(result.get('t_statistic'), float) and 
+            isinstance(result.get('p_value'), float)):
+            
+            print("  ✓ T-test returns valid t-statistic and p-value")
+            print(f"    T-statistic: {result.get('t_statistic'):.4f}")
+            print(f"    P-value: {result.get('p_value'):.6f}")
+            criteria_passed += 1
+        else:
+            print("  ✗ T-test failed to return valid results")
+            print(f"    Result: {result}")
+            
+    except Exception as e:
+        print(f"  ✗ Error in t-test: {e}")
+    
+    print()
+    
+    # Test 3: Parser domain routing
+    print("[ ] Criterion 3: Parser correctly routes statistics problems")
+    
+    try:
+        from core.parser import get_parser
+        
+        parser = get_parser()
+        
+        # Test statistical problem parsing
+        stat_problems = [
+            "calculate the mean, median, and variance of [1, 2, 3, 4, 5]",
+            "perform a t-test between [1,2,3] and [4,5,6]",
+            "find the p-value for comparing two samples",
+            "generate random numbers from normal distribution",
+            "calculate correlation between two variables"
+        ]
+        
+        all_parsed_correctly = True
+        for problem in stat_problems:
+            parsed = parser.parse(problem)
+            if parsed.domain.value != 'statistics':
+                print(f"  ✗ Failed to identify '{problem[:40]}...' as statistics")
+                all_parsed_correctly = False
+                break
+        
+        if all_parsed_correctly:
+            print("  ✓ Parser correctly identifies statistical problems")
+            criteria_passed += 1
+        
+    except Exception as e:
+        print(f"  ✗ Error in parser test: {e}")
+    
+    print()
+    
+    # Test 4: Error handling for insufficient data
+    print("[ ] Criterion 4: Structured error for t-test on [1] and [2]")
+    
+    try:
+        from solvers.stats_solver import perform_t_test
+        
+        result = perform_t_test([1], [2])
+        
+        if (not result.get('success') and 
+            'error' in result and 
+            'error_type' in result and 
+            result.get('error_type') == 'StatisticsError'):
+            
+            print("  ✓ Proper error handling for insufficient data")
+            print(f"    Error: {result.get('error')}")
+            criteria_passed += 1
+        else:
+            print("  ✗ Error handling failed")
+            print(f"    Result: {result}")
+            
+    except Exception as e:
+        print(f"  ✗ Error in error handling test: {e}")
+    
+    print()
+    
+    # Additional integration tests
+    print("Additional Integration Tests:")
+    print("-" * 30)
+    
+    # Test engine integration (if available)
+    try:
+        print("[ ] Testing engine integration...")
+        
+        # Test that the engine can handle a statistics problem
+        # Note: This would require the full engine pipeline to be working
+        print("  ⚠ Engine integration test skipped (requires full pipeline)")
+        
+    except Exception as e:
+        print(f"  ⚠ Engine integration test error: {e}")
+    
+    # Test all statistical functions are available
+    print("[ ] Testing all statistical functions are available...")
+    
+    required_functions = [
+        'calculate_descriptive_stats',
+        'get_distribution_details', 
+        'perform_t_test',
+        'generate_random_variates',
+        'perform_normality_test',
+        'calculate_correlation'
+    ]
+    
+    try:
+        from solvers import stats_solver
+        
+        all_functions_available = True
+        for func_name in required_functions:
+            if not hasattr(stats_solver, func_name):
+                print(f"  ✗ Missing function: {func_name}")
+                all_functions_available = False
+        
+        if all_functions_available:
+            print("  ✓ All required statistical functions are available")
+        
+    except Exception as e:
+        print(f"  ✗ Error checking functions: {e}")
+    
+    print()
+    print("=" * 65)
+    print(f"Acceptance Criteria Results: {criteria_passed}/{total_criteria} passed")
+    
+    if criteria_passed == total_criteria:
+        print("🎉 ALL ACCEPTANCE CRITERIA PASSED!")
+        print("\nThe statistics solver is successfully integrated into the Math AI Agent.")
+        print("\nFeatures available:")
+        print("- ✅ Descriptive statistics (mean, median, variance, etc.)")
+        print("- ✅ Hypothesis testing (t-tests)")
+        print("- ✅ Probability distributions (PDF, CDF, random generation)")
+        print("- ✅ Correlation analysis")
+        print("- ✅ Normality testing")
+        print("- ✅ Comprehensive error handling")
+        print("- ✅ Parser integration for statistical terminology")
+        print("\nUsage examples:")
+        print('- "Calculate the mean and variance of [1, 2, 3, 4, 5]"')
+        print('- "Perform a t-test between group A and group B"')
+        print('- "Generate 100 random numbers from normal distribution"')
+        print('- "Find the correlation between these two variables"')
+        return True
+    else:
+        print("❌ Some acceptance criteria not met.")
+        print("\nPlease check the implementation and resolve any issues.")
+        return False
+
+def test_parser_statistical_recognition():
+    """Test parser's ability to recognize various statistical problems."""
+    print("\nTesting Parser Statistical Problem Recognition")
+    print("-" * 50)
+    
+    try:
+        from core.parser import get_parser
+        from core.models import MathDomain, ProblemType
+        
+        parser = get_parser()
+        
+        test_cases = [
+            ("calculate the mean of [1, 2, 3, 4, 5]", MathDomain.STATISTICS, ProblemType.DESCRIPTIVE_STATISTICS),
+            ("perform a t-test between two samples", MathDomain.STATISTICS, ProblemType.T_TEST),
+            ("find the correlation between x and y", MathDomain.STATISTICS, ProblemType.CORRELATION_ANALYSIS),
+            ("generate random numbers from normal distribution", MathDomain.STATISTICS, ProblemType.RANDOM_GENERATION),
+            ("test if data is normally distributed", MathDomain.STATISTICS, ProblemType.NORMALITY_TEST),
+            ("find the PDF of normal distribution at x=1", MathDomain.STATISTICS, ProblemType.DISTRIBUTION_ANALYSIS),
+            ("what is the p-value for this hypothesis test", MathDomain.STATISTICS, ProblemType.HYPOTHESIS_TEST)
+        ]
+        
+        passed = 0
+        for problem_text, expected_domain, expected_type in test_cases:
+            parsed = parser.parse(problem_text)
+            
+            domain_correct = parsed.domain == expected_domain
+            type_correct = parsed.problem_type == expected_type
+            
+            if domain_correct and type_correct:
+                print(f"  ✓ '{problem_text[:40]}...' -> {expected_domain.value}, {expected_type.value}")
+                passed += 1
+            else:
+                print(f"  ✗ '{problem_text[:40]}...' -> {parsed.domain.value}, {parsed.problem_type.value}")
+                print(f"      Expected: {expected_domain.value}, {expected_type.value}")
+        
+        print(f"\nParser Recognition: {passed}/{len(test_cases)} passed")
+        return passed == len(test_cases)
+        
+    except Exception as e:
+        print(f"Error in parser test: {e}")
+        return False
+
+def main():
+    """Run all acceptance tests."""
+    print("Statistics Solver (SOLVER-003) Acceptance Tests")
+    print("=" * 60)
+    
+    # Run main acceptance criteria tests
+    main_criteria_passed = test_acceptance_criteria()
+    
+    # Run parser recognition tests
+    parser_tests_passed = test_parser_statistical_recognition()
+    
+    print("\n" + "=" * 60)
+    print("FINAL RESULTS:")
+    print(f"Main Acceptance Criteria: {'PASSED' if main_criteria_passed else 'FAILED'}")
+    print(f"Parser Recognition Tests: {'PASSED' if parser_tests_passed else 'FAILED'}")
+    
+    if main_criteria_passed and parser_tests_passed:
+        print("\n🎉 STATISTICS SOLVER IMPLEMENTATION COMPLETE!")
+        print("The Math AI Agent now supports comprehensive statistical analysis.")
+        return 0
+    else:
+        print("\n❌ Some tests failed. Please review the implementation.")
+        return 1
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,4 +1,4 @@
-# Performance Testing Dependencies for MathBoardAI Agent
+# Performance Testing Dependencies for Math AI Agent
 # Install with: pip install -r requirements-performance.txt
 
 # Load testing framework

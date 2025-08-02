@@ -1,7 +1,7 @@
 Adding New Modules
 ==================
 
-This tutorial walks you through the process of extending the MathBoardAI Agent system by adding new solvers, problem types, and integration components. We'll use a concrete example to demonstrate the complete process.
+This tutorial walks you through the process of extending the Math AI Agent system by adding new solvers, problem types, and integration components. We'll use a concrete example to demonstrate the complete process.
 
 Tutorial: Adding a New Solver
 ------------------------------
@@ -35,7 +35,7 @@ Create the new solver file:
 
    # src/solvers/geometry_solver.py
    """
-   Geometry Solver for MathBoardAI Agent
+   Geometry Solver for Math AI Agent
    
    Handles geometric calculations including areas, perimeters,
    coordinate geometry, and geometric theorem applications.
@@ -811,7 +811,7 @@ Create a tutorial for geometry problems:
    Geometry Tutorial
    =================
    
-   This tutorial demonstrates how to solve various geometric problems using the MathBoardAI Agent.
+   This tutorial demonstrates how to solve various geometric problems using the Math AI Agent.
    
    Basic Shape Calculations
    ------------------------
@@ -926,4 +926,4 @@ For complex problems spanning multiple domains:
        # Implement intelligent solver selection logic
        pass
 
-This comprehensive tutorial demonstrates how to extend the MathBoardAI Agent with new mathematical capabilities while maintaining code quality, testing standards, and integration consistency.
+This comprehensive tutorial demonstrates how to extend the Math AI Agent with new mathematical capabilities while maintaining code quality, testing standards, and integration consistency.

@@ -1,1 +1,513 @@
-# MathBoardAI Agent - Performance Testing Suite This directory contains the complete performance and stress testing suite for the MathBoardAI Agent application. The suite is designed to measure stability, resource consumption, and response latency under various load conditions. ## Overview The performance testing suite consists of three main components: 1. **`locustfile.py`** - Locust load testing script that simulates concurrent users 2. **`resource_monitor.py`** - System resource monitoring script for CPU/Memory tracking 3. **`../scripts/run_performance_test.sh`** - Orchestration script that coordinates all tests ## Quick Start ### Prerequisites Ensure you have the following installed: ```bash # Python packages pip install locust psutil docker requests # System requirements # - Docker and Docker Compose # - Python 3.8+ # - MathBoardAI Agent application (running or ready to start) ``` ### Basic Usage ```bash # Run the complete performance test suite cd /path/to/math-ai-agent ./scripts/run_performance_test.sh # The test will: # 1. Start the application (if needed) # 2. Begin resource monitoring # 3. Run 50 concurrent users for 3 minutes # 4. Generate comprehensive reports ``` ## Detailed Documentation ### 1. Locust Load Testing (`locustfile.py`) #### Overview The Locust script simulates realistic user behavior by submitting various types of mathematical problems to the MathBoardAI Agent. #### Problem Categories **Simple Problems (Weight: 3)** - Basic algebra: `Solve x + 5 = 10` - Simple calculus: `Find derivative of x^2` - Quick factoring: `Factor x^2 - 4` **Medium Problems (Weight: 5)** - Linear algebra: `Find determinant of [[2,1],[3,4]]` - Systems of equations: `Solve: 2x + y = 5, x - y = 1` - Integration: `Find integral of x * e^x dx from 0 to 1` **Complex Problems (Weight: 2)** - Matrix decomposition: `Perform SVD on 5x5 matrix` - Optimization: `Use gradient descent to minimize f(x,y) = (x-3)^2 + (y-2)^2` - Advanced statistics: `Perform ANOVA on three groups` #### User Classes **MathAgentUser (Default)** - Balanced mix of problem types - Wait time: 1-5 seconds between requests - Simulates normal user behavior **StressTestUser** - More aggressive testing patterns - Shorter wait times: 0.5-2 seconds - Includes rapid-fire problem submission **EnduranceTestUser** - Consistent load patterns - Fixed 3-second intervals - Focus on sustained performance #### Usage Examples ```bash # Basic load test locust -f locustfile.py --host=http://localhost:7860 # Headless mode with specific parameters locust -f locustfile.py --host=http://localhost:7860 \ --users 50 --spawn-rate 5 --run-time 180s --headless # Stress testing locust -f locustfile.py --host=http://localhost:7860 \ --users 100 --spawn-rate 10 --user-class StressTestUser ``` #### Custom Configuration Set environment variables to customize behavior: ```bash export OPENAI_API_KEY="your-actual-api-key" export TEST_TYPE="stress" # default, stress, or endurance ``` ### 2. Resource Monitoring (`resource_monitor.py`) #### Overview Monitors system resources for the MathBoardAI Agent application and logs detailed metrics to CSV files. #### Monitoring Capabilities **System Metrics** - CPU usage (percentage) - Memory usage (MB and percentage) - Available memory - Disk I/O (read/write MB) - Network I/O (sent/received MB) **Process-Specific Metrics** - Number of threads - File descriptor count - Process status - Process-specific CPU and memory **Docker Container Metrics** - Container CPU usage - Container memory limits and usage - Container network statistics - Container block I/O statistics #### Usage Examples ```bash # Monitor Docker container python3 resource_monitor.py --container math-ai-agent-dev # Monitor specific process python3 resource_monitor.py --process "gradio" --output custom_log.csv # Monitor with custom interval python3 resource_monitor.py --container math-ai-agent-dev --interval 0.5 # Monitor for specific duration python3 resource_monitor.py --container math-ai-agent-dev --duration 300 ``` #### Output Format The CSV output includes these columns: - `timestamp`: ISO format timestamp - `elapsed_seconds`: Time since monitoring started - `cpu_percent`: CPU usage percentage - `memory_mb`: Memory usage in MB - `memory_percent`: Memory usage percentage - `memory_available_mb`: Available memory in MB - `disk_read_mb`: Cumulative disk reads in MB - `disk_write_mb`: Cumulative disk writes in MB - `network_sent_mb`: Network data sent in MB - `network_recv_mb`: Network data received in MB - `num_threads`: Number of threads (process monitoring) - `num_fds`: Number of file descriptors (process monitoring) - `status`: Process or container status ### 3. Orchestration Script (`run_performance_test.sh`) #### Overview The main orchestration script that coordinates the entire performance testing workflow. #### Features **Automated Workflow** 1. Dependency checking 2. Application setup and startup 3. Resource monitoring initialization 4. Load test execution 5. Results analysis and reporting 6. Cleanup and shutdown **Configurable Parameters** - Number of concurrent users - User spawn rate - Test duration - Target host URL - Container name **Results Analysis** - Automatic acceptance criteria validation - Performance metrics calculation - Pass/fail determination - Comprehensive reporting #### Usage Examples ```bash # Default test (50 users, 3 minutes) ./scripts/run_performance_test.sh # Custom configuration ./scripts/run_performance_test.sh \ --users 100 \ --duration 300 \ --spawn-rate 10 # Test against remote host ./scripts/run_performance_test.sh \ --host http://remote-server:7860 \ --skip-setup # Quick test for development ./scripts/run_performance_test.sh \ --users 10 \ --duration 60 ``` #### Command Line Options ```bash Usage: run_performance_test.sh [OPTIONS] OPTIONS: -u, --users USERS Number of concurrent users (default: 50) -r, --spawn-rate RATE User spawn rate per second (default: 5) -d, --duration SECONDS Test duration in seconds (default: 180) -h, --host HOST Target host URL (default: http://localhost:7860) -c, --container NAME Docker container name (default: math-ai-agent-dev) --skip-setup Skip application setup --help Show help message ``` #### Environment Variables ```bash export OPENAI_API_KEY="your-api-key" export USERS=100 export DURATION=300 export HOST="http://localhost:7860" ``` ## Test Results and Analysis ### Output Files After running tests, you'll find results in `test_results/performance/`: **Locust Results** - `locust_stats.csv`: Detailed request statistics - `locust_failures.csv`: Failed request details - `performance_report.html`: Interactive HTML dashboard **Resource Monitoring** - `resource_log.csv`: Time-series resource usage data **Summary Reports** - `test_summary.txt`: Executive summary of test results ### Interpreting Results #### Locust Metrics **Key Metrics to Monitor:** - **Request Count**: Total number of requests made - **Failure Count**: Number of failed requests - **Failure Rate**: Percentage of failed requests (should be < 2%) - **Average Response Time**: Mean response time in milliseconds - **95th Percentile**: 95% of requests complete within this time - **RPS**: Requests per second (throughput) **Performance Thresholds:** - **Failure Rate**: < 2% - **Average Response Time**: < 15 seconds for medium problems - **95th Percentile**: < 30 seconds #### Resource Usage Metrics **Memory Usage:** - **Maximum Memory**: < 1GB during test - **Memory Growth**: Should not grow unbounded - **Memory Stability**: Should stabilize during steady load **CPU Usage:** - ℹ **Average CPU**: Expected to be high during load - **CPU Spikes**: Brief spikes are normal, sustained 100% is concerning **I/O Metrics:** - ℹ **Disk I/O**: Monitor for excessive disk usage - ℹ **Network I/O**: Should correlate with request volume ### Sample Results Analysis ``` === LOCUST TEST RESULTS === Total Requests: 2,450 Failed Requests: 15 Failure Rate: 0.61% PASS: < 2% Average Response Time: 8,234 ms PASS: < 15 seconds 95th Percentile: 22,156 ms === RESOURCE USAGE RESULTS === Memory Usage - Avg: 512.3MB, Max: 687.1MB, Min: 445.2MB PASS: < 1GB CPU Usage - Avg: 67.2%, Max: 89.4% ALL TESTS PASSED! ``` ## Acceptance Criteria Validation The test suite automatically validates these acceptance criteria: ### Acceptance Criteria Checklist - [ ] **50 Concurrent Users**: Test runs with 50+ concurrent users - [ ] **3 Minutes Duration**: Test runs for 3+ minutes (180+ seconds) - [ ] **Failure Rate < 2%**: Less than 2% of requests fail - [ ] **Response Time < 15s**: Average response time for medium problems < 15 seconds - [ ] **Memory Usage < 1GB**: Application memory usage stays below 1GB - [ ] **Resource Data Collection**: Complete resource monitoring throughout test - [ ] **Stable Performance**: No unbounded memory growth or performance degradation ### Manual Validation Steps If you need to manually verify results: ```bash # Check Locust failure rate grep "Aggregated" test_results/performance/locust_stats.csv # Check maximum memory usage python3 -c " import csv with open('test_results/performance/resource_log.csv') as f: reader = csv.DictReader(f) memory_values = [float(row['memory_mb']) for row in reader if row['memory_mb']] print(f'Max Memory: {max(memory_values):.1f}MB') " # Check test duration python3 -c " import csv with open('test_results/performance/resource_log.csv') as f: reader = csv.DictReader(f) rows = list(reader) duration = float(rows[-1]['elapsed_seconds']) print(f'Test Duration: {duration:.1f} seconds') " ``` ## Troubleshooting ### Common Issues #### "Application not accessible" ```bash # Check if Docker container is running docker ps | grep math-ai-agent # Check application logs docker logs math-ai-agent-dev # Manually test endpoint curl http://localhost:7860 ``` #### "Python package not found" ```bash # Install missing packages pip install locust psutil docker # Check installation python3 -c "import locust, psutil, docker; print('All packages installed')" ``` #### "Permission denied" for Docker ```bash # Add user to docker group (Linux) sudo usermod -aG docker $USER newgrp docker # Or run with sudo (not recommended) sudo ./scripts/run_performance_test.sh ``` #### High failure rates - Check if OpenAI API key is valid and has credits - Verify application is fully started before testing - Reduce concurrent users for debugging - Check application logs for errors #### Resource monitoring issues ```bash # Test resource monitor independently python3 tests/performance/resource_monitor.py --container math-ai-agent-dev --duration 30 # Check Docker access docker stats math-ai-agent-dev ``` ### Debug Mode Enable verbose logging for debugging: ```bash # Run with debug output ./scripts/run_performance_test.sh --users 5 --duration 30 2>&1 | tee debug.log # Monitor resource usage in real-time python3 tests/performance/resource_monitor.py --container math-ai-agent-dev --verbose ``` ## Advanced Usage ### Custom Test Scenarios #### Stress Testing ```bash # High load stress test ./scripts/run_performance_test.sh --users 200 --spawn-rate 20 --duration 600 # Rapid user ramp-up ./scripts/run_performance_test.sh --users 100 --spawn-rate 50 --duration 180 ``` #### Endurance Testing ```bash # Long duration test ./scripts/run_performance_test.sh --users 25 --duration 3600 # 1 hour # Overnight endurance test ./scripts/run_performance_test.sh --users 10 --duration 28800 # 8 hours ``` #### Load Pattern Testing ```bash # Gradual ramp-up for users in 10 20 30 40 50; do echo "Testing with $users users..." ./scripts/run_performance_test.sh --users $users --duration 120 sleep 60 # Cool-down period done ``` ### Integration with CI/CD #### GitHub Actions Example ```yaml name: Performance Tests on: [push, pull_request] jobs: performance: runs-on: ubuntu-latest steps: - uses: actions/checkout@v2 - name: Setup Python uses: actions/setup-python@v2 with: python-version: '3.9' - name: Install dependencies run: pip install locust psutil docker - name: Run performance tests run: ./scripts/run_performance_test.sh --users 10 --duration 60 env: OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }} ``` ### Custom Metrics Collection #### Extending Resource Monitoring ```python # Add custom metrics to resource_monitor.py def collect_custom_metrics(self): """Add your custom metrics collection here.""" return { 'custom_metric_1': get_custom_value(), 'custom_metric_2': calculate_custom_metric() } ``` #### Custom Locust Tasks ```python # Add to locustfile.py @task(1) def custom_load_test(self): """Your custom load test scenario.""" problem = "Your custom problem type" self._make_prediction_request(problem, "custom") ``` ## Support and Contributing ### Getting Help - Check the troubleshooting section above - Review application logs: `docker logs math-ai-agent-dev` - Verify system requirements and dependencies - Test components individually before running full suite ### Contributing - Follow the existing code structure and style - Add appropriate error handling and logging - Update documentation for new features - Test changes thoroughly before submitting ### Performance Optimization Tips - Adjust user spawn rates based on your system capacity - Monitor system resources during development - Use appropriate test durations (longer for stability, shorter for development) - Consider network latency when testing remote deployments --- This performance testing suite ensures the MathBoardAI Agent application meets production-ready stability and performance requirements. Regular performance testing helps maintain quality and identify potential issues before they affect users.
+# Math AI Agent - Performance Testing Suite
+
+This directory contains the complete performance and stress testing suite for the Math AI Agent application. The suite is designed to measure stability, resource consumption, and response latency under various load conditions.
+
+## Overview
+
+The performance testing suite consists of three main components:
+
+1. **`locustfile.py`** - Locust load testing script that simulates concurrent users
+2. **`resource_monitor.py`** - System resource monitoring script for CPU/Memory tracking
+3. **`../scripts/run_performance_test.sh`** - Orchestration script that coordinates all tests
+
+## Quick Start
+
+### Prerequisites
+
+Ensure you have the following installed:
+
+```bash
+# Python packages
+pip install locust psutil docker requests
+
+# System requirements
+# - Docker and Docker Compose
+# - Python 3.8+
+# - Math AI Agent application (running or ready to start)
+```
+
+### Basic Usage
+
+```bash
+# Run the complete performance test suite
+cd /path/to/math-ai-agent
+./scripts/run_performance_test.sh
+
+# The test will:
+# 1. Start the application (if needed)
+# 2. Begin resource monitoring
+# 3. Run 50 concurrent users for 3 minutes
+# 4. Generate comprehensive reports
+```
+
+## Detailed Documentation
+
+### 1. Locust Load Testing (`locustfile.py`)
+
+#### Overview
+The Locust script simulates realistic user behavior by submitting various types of mathematical problems to the Math AI Agent.
+
+#### Problem Categories
+
+**Simple Problems (Weight: 3)**
+- Basic algebra: `Solve x + 5 = 10`
+- Simple calculus: `Find derivative of x^2`
+- Quick factoring: `Factor x^2 - 4`
+
+**Medium Problems (Weight: 5)**
+- Linear algebra: `Find determinant of [[2,1],[3,4]]`
+- Systems of equations: `Solve: 2x + y = 5, x - y = 1`
+- Integration: `Find integral of x * e^x dx from 0 to 1`
+
+**Complex Problems (Weight: 2)**
+- Matrix decomposition: `Perform SVD on 5x5 matrix`
+- Optimization: `Use gradient descent to minimize f(x,y) = (x-3)^2 + (y-2)^2`
+- Advanced statistics: `Perform ANOVA on three groups`
+
+#### User Classes
+
+**MathAgentUser (Default)**
+- Balanced mix of problem types
+- Wait time: 1-5 seconds between requests
+- Simulates normal user behavior
+
+**StressTestUser**
+- More aggressive testing patterns
+- Shorter wait times: 0.5-2 seconds
+- Includes rapid-fire problem submission
+
+**EnduranceTestUser**
+- Consistent load patterns
+- Fixed 3-second intervals
+- Focus on sustained performance
+
+#### Usage Examples
+
+```bash
+# Basic load test
+locust -f locustfile.py --host=http://localhost:7860
+
+# Headless mode with specific parameters
+locust -f locustfile.py --host=http://localhost:7860 \
+  --users 50 --spawn-rate 5 --run-time 180s --headless
+
+# Stress testing
+locust -f locustfile.py --host=http://localhost:7860 \
+  --users 100 --spawn-rate 10 --user-class StressTestUser
+```
+
+#### Custom Configuration
+
+Set environment variables to customize behavior:
+
+```bash
+export OPENAI_API_KEY="your-actual-api-key"
+export TEST_TYPE="stress"  # default, stress, or endurance
+```
+
+### 2. Resource Monitoring (`resource_monitor.py`)
+
+#### Overview
+Monitors system resources for the Math AI Agent application and logs detailed metrics to CSV files.
+
+#### Monitoring Capabilities
+
+**System Metrics**
+- CPU usage (percentage)
+- Memory usage (MB and percentage)
+- Available memory
+- Disk I/O (read/write MB)
+- Network I/O (sent/received MB)
+
+**Process-Specific Metrics**
+- Number of threads
+- File descriptor count
+- Process status
+- Process-specific CPU and memory
+
+**Docker Container Metrics**
+- Container CPU usage
+- Container memory limits and usage
+- Container network statistics
+- Container block I/O statistics
+
+#### Usage Examples
+
+```bash
+# Monitor Docker container
+python3 resource_monitor.py --container math-ai-agent-dev
+
+# Monitor specific process
+python3 resource_monitor.py --process "gradio" --output custom_log.csv
+
+# Monitor with custom interval
+python3 resource_monitor.py --container math-ai-agent-dev --interval 0.5
+
+# Monitor for specific duration
+python3 resource_monitor.py --container math-ai-agent-dev --duration 300
+```
+
+#### Output Format
+
+The CSV output includes these columns:
+- `timestamp`: ISO format timestamp
+- `elapsed_seconds`: Time since monitoring started
+- `cpu_percent`: CPU usage percentage
+- `memory_mb`: Memory usage in MB
+- `memory_percent`: Memory usage percentage
+- `memory_available_mb`: Available memory in MB
+- `disk_read_mb`: Cumulative disk reads in MB
+- `disk_write_mb`: Cumulative disk writes in MB
+- `network_sent_mb`: Network data sent in MB
+- `network_recv_mb`: Network data received in MB
+- `num_threads`: Number of threads (process monitoring)
+- `num_fds`: Number of file descriptors (process monitoring)
+- `status`: Process or container status
+
+### 3. Orchestration Script (`run_performance_test.sh`)
+
+#### Overview
+The main orchestration script that coordinates the entire performance testing workflow.
+
+#### Features
+
+**Automated Workflow**
+1. Dependency checking
+2. Application setup and startup
+3. Resource monitoring initialization
+4. Load test execution
+5. Results analysis and reporting
+6. Cleanup and shutdown
+
+**Configurable Parameters**
+- Number of concurrent users
+- User spawn rate
+- Test duration
+- Target host URL
+- Container name
+
+**Results Analysis**
+- Automatic acceptance criteria validation
+- Performance metrics calculation
+- Pass/fail determination
+- Comprehensive reporting
+
+#### Usage Examples
+
+```bash
+# Default test (50 users, 3 minutes)
+./scripts/run_performance_test.sh
+
+# Custom configuration
+./scripts/run_performance_test.sh \
+  --users 100 \
+  --duration 300 \
+  --spawn-rate 10
+
+# Test against remote host
+./scripts/run_performance_test.sh \
+  --host http://remote-server:7860 \
+  --skip-setup
+
+# Quick test for development
+./scripts/run_performance_test.sh \
+  --users 10 \
+  --duration 60
+```
+
+#### Command Line Options
+
+```bash
+Usage: run_performance_test.sh [OPTIONS]
+
+OPTIONS:
+    -u, --users USERS              Number of concurrent users (default: 50)
+    -r, --spawn-rate RATE          User spawn rate per second (default: 5)
+    -d, --duration SECONDS         Test duration in seconds (default: 180)
+    -h, --host HOST                Target host URL (default: http://localhost:7860)
+    -c, --container NAME           Docker container name (default: math-ai-agent-dev)
+    --skip-setup                   Skip application setup
+    --help                         Show help message
+```
+
+#### Environment Variables
+
+```bash
+export OPENAI_API_KEY="your-api-key"
+export USERS=100
+export DURATION=300
+export HOST="http://localhost:7860"
+```
+
+## Test Results and Analysis
+
+### Output Files
+
+After running tests, you'll find results in `test_results/performance/`:
+
+**Locust Results**
+- `locust_stats.csv`: Detailed request statistics
+- `locust_failures.csv`: Failed request details
+- `performance_report.html`: Interactive HTML dashboard
+
+**Resource Monitoring**
+- `resource_log.csv`: Time-series resource usage data
+
+**Summary Reports**
+- `test_summary.txt`: Executive summary of test results
+
+### Interpreting Results
+
+#### Locust Metrics
+
+**Key Metrics to Monitor:**
+- **Request Count**: Total number of requests made
+- **Failure Count**: Number of failed requests
+- **Failure Rate**: Percentage of failed requests (should be < 2%)
+- **Average Response Time**: Mean response time in milliseconds
+- **95th Percentile**: 95% of requests complete within this time
+- **RPS**: Requests per second (throughput)
+
+**Performance Thresholds:**
+- ✅ **Failure Rate**: < 2%
+- ✅ **Average Response Time**: < 15 seconds for medium problems
+- ✅ **95th Percentile**: < 30 seconds
+
+#### Resource Usage Metrics
+
+**Memory Usage:**
+- ✅ **Maximum Memory**: < 1GB during test
+- ⚠️ **Memory Growth**: Should not grow unbounded
+- ✅ **Memory Stability**: Should stabilize during steady load
+
+**CPU Usage:**
+- ℹ️ **Average CPU**: Expected to be high during load
+- ⚠️ **CPU Spikes**: Brief spikes are normal, sustained 100% is concerning
+
+**I/O Metrics:**
+- ℹ️ **Disk I/O**: Monitor for excessive disk usage
+- ℹ️ **Network I/O**: Should correlate with request volume
+
+### Sample Results Analysis
+
+```
+=== LOCUST TEST RESULTS ===
+Total Requests: 2,450
+Failed Requests: 15
+Failure Rate: 0.61%               ✅ PASS: < 2%
+Average Response Time: 8,234 ms   ✅ PASS: < 15 seconds
+95th Percentile: 22,156 ms
+
+=== RESOURCE USAGE RESULTS ===
+Memory Usage - Avg: 512.3MB, Max: 687.1MB, Min: 445.2MB  ✅ PASS: < 1GB
+CPU Usage - Avg: 67.2%, Max: 89.4%
+
+🎉 ALL TESTS PASSED!
+```
+
+## Acceptance Criteria Validation
+
+The test suite automatically validates these acceptance criteria:
+
+### ✅ Acceptance Criteria Checklist
+
+- [ ] **50 Concurrent Users**: Test runs with 50+ concurrent users
+- [ ] **3 Minutes Duration**: Test runs for 3+ minutes (180+ seconds)
+- [ ] **Failure Rate < 2%**: Less than 2% of requests fail
+- [ ] **Response Time < 15s**: Average response time for medium problems < 15 seconds
+- [ ] **Memory Usage < 1GB**: Application memory usage stays below 1GB
+- [ ] **Resource Data Collection**: Complete resource monitoring throughout test
+- [ ] **Stable Performance**: No unbounded memory growth or performance degradation
+
+### Manual Validation Steps
+
+If you need to manually verify results:
+
+```bash
+# Check Locust failure rate
+grep "Aggregated" test_results/performance/locust_stats.csv
+
+# Check maximum memory usage
+python3 -c "
+import csv
+with open('test_results/performance/resource_log.csv') as f:
+    reader = csv.DictReader(f)
+    memory_values = [float(row['memory_mb']) for row in reader if row['memory_mb']]
+    print(f'Max Memory: {max(memory_values):.1f}MB')
+"
+
+# Check test duration
+python3 -c "
+import csv
+with open('test_results/performance/resource_log.csv') as f:
+    reader = csv.DictReader(f)
+    rows = list(reader)
+    duration = float(rows[-1]['elapsed_seconds'])
+    print(f'Test Duration: {duration:.1f} seconds')
+"
+```
+
+## Troubleshooting
+
+### Common Issues
+
+#### "Application not accessible"
+```bash
+# Check if Docker container is running
+docker ps | grep math-ai-agent
+
+# Check application logs
+docker logs math-ai-agent-dev
+
+# Manually test endpoint
+curl http://localhost:7860
+```
+
+#### "Python package not found"
+```bash
+# Install missing packages
+pip install locust psutil docker
+
+# Check installation
+python3 -c "import locust, psutil, docker; print('All packages installed')"
+```
+
+#### "Permission denied" for Docker
+```bash
+# Add user to docker group (Linux)
+sudo usermod -aG docker $USER
+newgrp docker
+
+# Or run with sudo (not recommended)
+sudo ./scripts/run_performance_test.sh
+```
+
+#### High failure rates
+- Check if OpenAI API key is valid and has credits
+- Verify application is fully started before testing
+- Reduce concurrent users for debugging
+- Check application logs for errors
+
+#### Resource monitoring issues
+```bash
+# Test resource monitor independently
+python3 tests/performance/resource_monitor.py --container math-ai-agent-dev --duration 30
+
+# Check Docker access
+docker stats math-ai-agent-dev
+```
+
+### Debug Mode
+
+Enable verbose logging for debugging:
+
+```bash
+# Run with debug output
+./scripts/run_performance_test.sh --users 5 --duration 30 2>&1 | tee debug.log
+
+# Monitor resource usage in real-time
+python3 tests/performance/resource_monitor.py --container math-ai-agent-dev --verbose
+```
+
+## Advanced Usage
+
+### Custom Test Scenarios
+
+#### Stress Testing
+```bash
+# High load stress test
+./scripts/run_performance_test.sh --users 200 --spawn-rate 20 --duration 600
+
+# Rapid user ramp-up
+./scripts/run_performance_test.sh --users 100 --spawn-rate 50 --duration 180
+```
+
+#### Endurance Testing
+```bash
+# Long duration test
+./scripts/run_performance_test.sh --users 25 --duration 3600  # 1 hour
+
+# Overnight endurance test
+./scripts/run_performance_test.sh --users 10 --duration 28800  # 8 hours
+```
+
+#### Load Pattern Testing
+```bash
+# Gradual ramp-up
+for users in 10 20 30 40 50; do
+    echo "Testing with $users users..."
+    ./scripts/run_performance_test.sh --users $users --duration 120
+    sleep 60  # Cool-down period
+done
+```
+
+### Integration with CI/CD
+
+#### GitHub Actions Example
+```yaml
+name: Performance Tests
+on: [push, pull_request]
+
+jobs:
+  performance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+      - name: Install dependencies
+        run: pip install locust psutil docker
+      - name: Run performance tests
+        run: ./scripts/run_performance_test.sh --users 10 --duration 60
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+```
+
+### Custom Metrics Collection
+
+#### Extending Resource Monitoring
+```python
+# Add custom metrics to resource_monitor.py
+def collect_custom_metrics(self):
+    """Add your custom metrics collection here."""
+    return {
+        'custom_metric_1': get_custom_value(),
+        'custom_metric_2': calculate_custom_metric()
+    }
+```
+
+#### Custom Locust Tasks
+```python
+# Add to locustfile.py
+@task(1)
+def custom_load_test(self):
+    """Your custom load test scenario."""
+    problem = "Your custom problem type"
+    self._make_prediction_request(problem, "custom")
+```
+
+## Support and Contributing
+
+### Getting Help
+- Check the troubleshooting section above
+- Review application logs: `docker logs math-ai-agent-dev`
+- Verify system requirements and dependencies
+- Test components individually before running full suite
+
+### Contributing
+- Follow the existing code structure and style
+- Add appropriate error handling and logging
+- Update documentation for new features
+- Test changes thoroughly before submitting
+
+### Performance Optimization Tips
+- Adjust user spawn rates based on your system capacity
+- Monitor system resources during development
+- Use appropriate test durations (longer for stability, shorter for development)
+- Consider network latency when testing remote deployments
+
+---
+
+This performance testing suite ensures the Math AI Agent application meets production-ready stability and performance requirements. Regular performance testing helps maintain quality and identify potential issues before they affect users.

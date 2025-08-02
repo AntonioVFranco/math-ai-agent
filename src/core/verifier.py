@@ -6,7 +6,7 @@ using both numerical and symbolic methods. This system ensures high accuracy
 and builds user trust by providing verifiable answers - a key differentiator
 from standard LLMs.
 
-Author: MathBoardAI Agent Team
+Author: Math AI Agent Team
 Task ID: CORE-003
 Integration: Core pipeline step in engine.py
 """

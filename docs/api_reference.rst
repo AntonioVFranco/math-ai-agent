@@ -1,7 +1,7 @@
 API Reference
 =============
 
-This section provides comprehensive documentation for all public APIs in the MathBoardAI Agent system. The documentation is automatically generated from docstrings in the source code.
+This section provides comprehensive documentation for all public APIs in the Math AI Agent system. The documentation is automatically generated from docstrings in the source code.
 
 Core Engine
 -----------
