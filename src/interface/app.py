@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # Constants
 APP_TITLE = "Math AI Agent"
 APP_DESCRIPTION = """
-# 🧮 Math AI Agent
+# MathBoardAI Agent
 
 Specialized AI agent for advanced mathematical problem solving.
 Supports symbolic computation, equation solving, calculus, and more.
@@ -173,7 +173,7 @@ def process_mathematical_problem(api_key: str, problem_text: str) -> Tuple[str, 
     api_valid, api_message = validate_api_key(api_key)
     if not api_valid:
         error_msg = f"""
-## ❌ Error: Invalid API Key
+## Error: Invalid API Key
 
 {api_message}
 
@@ -188,7 +188,7 @@ def process_mathematical_problem(api_key: str, problem_text: str) -> Tuple[str, 
     problem_valid, problem_message = validate_problem_input(problem_text)
     if not problem_valid:
         error_msg = f"""
-## ❌ Error: Invalid Problem Input
+## Error: Invalid Problem Input
 
 {problem_message}
 
@@ -211,18 +211,18 @@ def process_mathematical_problem(api_key: str, problem_text: str) -> Tuple[str, 
             # Add processing time and statistics
             if result.total_execution_time_ms:
                 execution_time_sec = result.total_execution_time_ms / 1000
-                metadata_parts.append(f"⏱️ **Processing Time:** {execution_time_sec:.2f} seconds")
+                metadata_parts.append(f"**Processing Time:** {execution_time_sec:.2f} seconds")
             
             if result.openai_calls > 0:
-                metadata_parts.append(f"🤖 **OpenAI API Calls:** {result.openai_calls}")
+                metadata_parts.append(f"**OpenAI API Calls:** {result.openai_calls}")
             
             if result.sympy_calls > 0:
-                metadata_parts.append(f"🧮 **SymPy Calculations:** {result.sympy_calls}")
+                metadata_parts.append(f"**SymPy Calculations:** {result.sympy_calls}")
             
             # Add parsing confidence if available
             if result.parsed_problem and result.parsed_problem.confidence.overall > 0:
                 confidence_pct = result.parsed_problem.confidence.overall * 100
-                metadata_parts.append(f"🎯 **Parsing Confidence:** {confidence_pct:.1f}%")
+                metadata_parts.append(f"**Parsing Confidence:** {confidence_pct:.1f}%")
             
             # Combine the final answer with metadata
             final_response_parts = [result.final_answer]
@@ -231,7 +231,7 @@ def process_mathematical_problem(api_key: str, problem_text: str) -> Tuple[str, 
                 final_response_parts.extend([
                     "",
                     "---",
-                    "### 📊 Processing Information",
+                    "### Processing Information",
                     ""
                 ])
                 final_response_parts.extend(metadata_parts)
@@ -256,14 +256,14 @@ def process_mathematical_problem(api_key: str, problem_text: str) -> Tuple[str, 
                 error_details.append(f"**Processing Time:** {execution_time_sec:.2f} seconds")
             
             error_response = f"""
-## ❌ Solution Pipeline Failed
+## Solution Pipeline Failed
 
 {result.error_message}
 
-### 🔍 Diagnostic Information
+### Diagnostic Information
 {chr(10).join(error_details) if error_details else '*No additional diagnostic information available.*'}
 
-### 💡 Troubleshooting Tips
+### Troubleshooting Tips
 - **Check your API key**: Ensure it's valid and has sufficient credits
 - **Verify the problem**: Make sure your mathematical problem is clearly stated
 - **Try a simpler problem**: Start with basic problems to test the system
@@ -279,7 +279,7 @@ def process_mathematical_problem(api_key: str, problem_text: str) -> Tuple[str, 
     except ImportError as e:
         logger.error(f"Failed to import engine module: {str(e)}")
         error_msg = f"""
-## ❌ System Configuration Error
+## System Configuration Error
 
 The Math AI Agent engine is not properly configured. This may be due to missing dependencies or incorrect installation.
 
@@ -304,7 +304,7 @@ The Math AI Agent engine is not properly configured. This may be due to missing 
         traceback.print_exc()
         
         error_msg = f"""
-## ❌ Unexpected Processing Error
+## Unexpected Processing Error
 
 An unexpected error occurred while processing your mathematical problem.
 
@@ -342,7 +342,7 @@ def create_interface() -> gr.Blocks:
         title=APP_TITLE,
         css=CUSTOM_CSS,
         theme=gr.themes.Soft(
-            primary_hue="blue",
+            primary_hue="orange",
             secondary_hue="gray",
             neutral_hue="slate"
         )
@@ -353,7 +353,7 @@ def create_interface() -> gr.Blocks:
         
         # Settings accordion (API key input)
         with gr.Accordion("Settings / Configurações", open=False) as settings_accordion:
-            gr.Markdown("### 🔑 API Configuration")
+            gr.Markdown("### API Configuration")
             gr.Markdown("Enter your OpenAI API key to enable mathematical problem solving.")
             
             api_key_input = gr.Textbox(
@@ -376,7 +376,7 @@ def create_interface() -> gr.Blocks:
             """)
         
         # Main interface
-        gr.Markdown("### 📝 Mathematical Problem Input")
+        gr.Markdown("### Mathematical Problem Input")
         
         with gr.Row():
             with gr.Column(scale=1):
@@ -406,17 +406,17 @@ Encontre o valor máximo da função f(x) = -x² + 4x + 1""",
             )
         
         # Output display with tabs
-        gr.Markdown("### 📊 Results / Resultados")
+        gr.Markdown("### Results / Resultados")
         
         with gr.Tabs():
-            with gr.Tab("📄 Solution / Solução"):
+            with gr.Tab("Solution / Solução"):
                 output_display = gr.Markdown(
                     value="*Insira um problema matemático e clique em 'Resolver' para ver os resultados aqui.*\n\n*Enter a mathematical problem and click 'Resolver' to see the results here.*",
                     elem_classes=["output-display"],
                     container=True
                 )
             
-            with gr.Tab("📊 Visualização"):
+            with gr.Tab("Visualização"):
                 plot_display = gr.Plot(
                     visible=False,
                     container=True,
@@ -448,7 +448,7 @@ Encontre o valor máximo da função f(x) = -x² + 4x + 1""",
             except Exception as e:
                 logger.error(f"Submit handler error: {str(e)}")
                 error_msg = f"""
-## ❌ System Error
+## System Error
 
 An unexpected system error occurred:
 
@@ -479,7 +479,7 @@ Please try again or refresh the page.
         gr.Markdown("""
         ---
         
-        ### 📚 About Math AI Agent
+        ### About MathBoardAI Agent
         
         This is a specialized AI agent designed to excel at mathematical problem solving.
         It combines symbolic computation, advanced reasoning, and step-by-step explanations
@@ -492,7 +492,7 @@ Please try again or refresh the page.
         - Step-by-step solution explanations
         - Result verification and validation
         
-        **Status:** Minimal Viable Interface (UI-001) ✅
+        **Status:** Minimal Viable Interface (UI-001)
         """)
     
     return interface
